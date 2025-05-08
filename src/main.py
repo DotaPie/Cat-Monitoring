@@ -132,7 +132,13 @@ def write_and_upload_video(cam_index, recorded_frames, video_start_datetime_stri
 
     file_name = f"{cam_name}_{video_start_datetime_string}.mp4"
     full_file_path = os.path.join(VIDEO_PATH, file_name)
-    out = cv2.VideoWriter(full_file_path, fourcc, CAMERA_CONFIGS[cam_index]["FPS"], (CAMERA_CONFIGS[cam_index]["FRAME_WIDTH"], CAMERA_CONFIGS[cam_index]["FRAME_HEIGHT"]))
+
+    if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
+        video_fps = CAMERA_CONFIGS[cam_index]["FPS_LIMITER"]
+    else:
+        video_fps = CAMERA_CONFIGS[cam_index]["FPS"]
+    
+    out = cv2.VideoWriter(full_file_path, fourcc, video_fps, (CAMERA_CONFIGS[cam_index]["FRAME_WIDTH"], CAMERA_CONFIGS[cam_index]["FRAME_HEIGHT"]))
 
     for frame in frame_buffer_copy_array[cam_index]:
         out.write(frame)
@@ -261,6 +267,10 @@ def cam_worker(cam_index):
             if frame_duration < frame_duration_expected:
                 logger.debug(f"[{cam_name}] Delaying next frame ...")   
                 time.sleep(frame_duration_expected - frame_duration)
+            elif frame_duration > frame_duration_expected:
+                logger.warning(f"[{cam_name}] Frames are taking too long to process")    
+            else:
+                pass
 
 def cam_loop(cam_index):
     cam_name = CAMERA_CONFIGS[cam_index]["NAME"]
