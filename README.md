@@ -10,3 +10,7 @@ Quick start:
 3) sudo bash ./cat-monitoring/src/install.sh
 
 Note: for raspberry choose requirements-rpi.txt during running install script (will be prompted)
+
+TODO:
+- Timestamp to videos
+- Verify videos continuity, especially pre-buffer -> main buffer

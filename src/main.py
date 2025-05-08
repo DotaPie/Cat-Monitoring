@@ -267,8 +267,8 @@ def cam_worker(cam_index):
             if frame_duration < frame_duration_expected:
                 logger.debug(f"[{cam_name}] Delaying next frame ...")   
                 time.sleep(frame_duration_expected - frame_duration)
-            elif frame_duration > frame_duration_expected:
-                logger.warning(f"[{cam_name}] Frames are taking too long to process")    
+            elif frame_duration > frame_duration_expected and frame_counter_array[cam_index] > SKIP_FIRST_FRAMES:
+                logger.warning(f"[{cam_name}] Frame is taking too long to process")    
             else:
                 pass
 
