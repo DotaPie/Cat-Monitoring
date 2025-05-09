@@ -15,6 +15,8 @@ import time
 import ftplib
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import AnyStr
+import sys
+import signal
 
 class State(Enum):
     NONE = 0
@@ -338,11 +340,11 @@ def init_cams():
     for t in threads:
         t.join()
 
-def init_gpio():
+def init_LED():
     GPIO.setmode(GPIO.BCM) 
     GPIO.setup(STATUS_LED_GPIO_PIN, GPIO.OUT)
 
-def handle_led():
+def handle_LED():
     while not stop_event.is_set():
         motion = False
 
@@ -360,15 +362,36 @@ def handle_led():
             GPIO.output(STATUS_LED_GPIO_PIN, GPIO.LOW) 
             time.sleep(0.375)       
 
-    GPIO.output(STATUS_LED_GPIO_PIN, GPIO.LOW)
-    GPIO.cleanup()
-
 def main():
     os.makedirs(VIDEO_PATH, exist_ok=True)
 
+    threads = []
+    if STATUS_LED:
+        led_t = None
+
+    def shutdown(signum, frame):
+        logger.info(f"[MAIN] Signal {signum} received - shutting down")
+        stop_event.set()                 
+
+        if STATUS_LED:
+            led_t.join()
+            logger.info("[LED] Shutdown of LED completed")       
+
+        for cam_index in range(CAM_COUNT):
+            cam_name = CAMERA_CONFIGS[cam_index]["NAME"]
+
+            threads[cam_index].join()
+            logger.info(f"[{cam_name}] Shutdown of camera worker completed")
+
+        GPIO.output(STATUS_LED_GPIO_PIN, GPIO.LOW)
+        GPIO.cleanup()                   
+        sys.exit(0)
+
+    for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, shutdown)
+
     init_cams()
 
-    threads = []
     for cam_index in range(CAM_COUNT):   
         cam_name = CAMERA_CONFIGS[cam_index]["NAME"]
 
@@ -378,31 +401,18 @@ def main():
         threads.append(t)
 
     if STATUS_LED:
-        logger.info("[LED] Setuping GPIO LED ...")
-        init_gpio()
-        logger.info("[LED] Starting GPIO handler ...")
-        led_t = threading.Thread(target=handle_led)
+        logger.info("[LED] Init LED ...")
+        init_LED()
+        logger.info("[LED] Starting LED handler ...")
+        led_t = threading.Thread(target=handle_LED)
         led_t.start()
 
     try:
         while 1:
             time.sleep(1)
-    except KeyboardInterrupt:
-        logger.info("Ctrl-C detected")
     except Exception:
-        logger.exception("Other exception detected")
-    finally:
-        stop_event.set() 
-
-        if STATUS_LED:
-            led_t.join()
-            logger.info("[LED] Shutdown of LED completed")
-
-        for cam_index in range(CAM_COUNT):
-            cam_name = CAMERA_CONFIGS[cam_index]["NAME"]
-
-            threads[cam_index].join()
-            logger.info(f"[{cam_name}] Shutdown of camera worker completed")
+        logger.exception("[MAIN] Unexpected exception detected")
+        shutdown(signal.SIGTERM, None)
 
 if __name__ == "__main__":
     main()
