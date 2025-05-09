@@ -196,7 +196,7 @@ def cam_worker(cam_index):
         ret, frame = cap_array[cam_index].read()
         
         if not ret:
-            logger.warning(f"[{cam_name}] Empty frame")
+            logger.error(f"[{cam_name}] Empty frame")
             return
         
         frame_counter_array[cam_index] += 1
