@@ -296,8 +296,8 @@ def cam_loop(cam_index):
         if stop_event.is_set():
             return
  
-        logger.info(f"[{cam_name}] Re-opening cv2 cap in 2 seconds ...")
-        time.sleep(2)
+        logger.info(f"[{cam_name}] Re-opening cv2 cap in 15 seconds ...")
+        time.sleep(15)
         init_cam(cam_index)
 
 
