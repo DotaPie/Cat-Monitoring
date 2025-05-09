@@ -17,7 +17,7 @@ Quick start:
 
 Verify with:
 1) sudo systemctl status cat-monitoring
-2) sudo journalctl -u cat-monitoring.service -n 100 -f -g '' # for CAM1 log only for example, insert "\[CAM1\]" into ''
+2) sudo journalctl -u cat-monitoring.service -n 100 -f -g '' # for CAM1 log only for example, insert "\\[CAM1\\]" into ''
 
 Note: for Raspberry PI choose requirements-rpi.txt during running install script (you will be prompted)
 
