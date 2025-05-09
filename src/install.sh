@@ -89,5 +89,5 @@ systemctl daemon-reload
 systemctl enable cat-monitoring
 systemctl start  cat-monitoring
 
-echo -e "\n🎉  All done! Check the service status with:"
+echo -e "\nAll done! Check the service status with:"
 echo "    sudo systemctl status cat-monitoring"

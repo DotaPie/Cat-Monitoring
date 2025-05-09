@@ -14,3 +14,4 @@ Note: for raspberry choose requirements-rpi.txt during running install script (w
 TODO:
 - Timestamp to videos
 - Verify videos continuity, especially pre-buffer -> main buffer
+- GPIO not clearing properly when service is restarted
