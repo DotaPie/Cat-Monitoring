@@ -210,13 +210,16 @@ def cam_worker(cam_index):
         motion_pixels_array[cam_index] = int(np.sum(thresh) / 255)
         logger.debug(f"[{cam_name}] Frame #{frame_counter_array[cam_index]} -> {motion_pixels_array[cam_index]} px")
 
-        # stabilize frame detector
-        if frame_counter_array[cam_index] > SKIP_FIRST_FRAMES:
+        if frame_counter_array[cam_index] > SKIP_FIRST_FRAMES: # stabilize frame detector
             if motion_pixels_array[cam_index] >= CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD"] and previous_motion_pixels_array[cam_index] >= CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD"]:
-                motion_frames_array[cam_index] += 1  
+                motion_frames_array[cam_index] += 1
+            elif motion_pixels_array[cam_index] >= CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD"] and previous_motion_pixels_array[cam_index] < CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD"]  
+                motion_frames_array[cam_index] = 0
 
             elif motion_pixels_array[cam_index] < CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD"] and previous_motion_pixels_array[cam_index] < CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD"]:
-                no_motion_frames_array[cam_index] += 1   
+                no_motion_frames_array[cam_index] += 1 
+            elif motion_pixels_array[cam_index] < CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD"] and previous_motion_pixels_array[cam_index] >= CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD"]:
+                no_motion_frames_array[cam_index] = 0  
 
             previous_motion_pixels_array[cam_index] = motion_pixels_array[cam_index]
 
@@ -226,7 +229,6 @@ def cam_worker(cam_index):
                 
                 video_start_datetime_string_array[cam_index] = get_datetime_string()
                 threading.Thread(target=copy_frame_buffer, args=(cam_index,)).start()
-
             elif is_no_motion(cam_index) and state_array[cam_index] == State.RECORDING:
                 logger.info(f"[{cam_name}] Motion stopped")
                 state_array[cam_index] = State.POST_RECORDING
@@ -234,34 +236,32 @@ def cam_worker(cam_index):
                 
             if state_array[cam_index] == State.RECORDING:
                 frames_array[cam_index].append(frame.copy())
-
             elif state_array[cam_index] == State.POST_RECORDING:
                 post_motion_frame_count_array[cam_index] += 1
                 frames_array[cam_index].append(frame.copy())
 
-                # motion detected during POST_RECORDING
+                # if motion detected during POST_RECORDING, back to RECORDING
                 if is_motion(cam_index):
                     logger.info(f"[{cam_name}] Motion detected (during POST_RECORDING state)")   
                     state_array[cam_index] = State.RECORDING 
-                    continue
-
-                # trigger finalizing video and prepare for next motion detection
-                if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
-                    post_event_frames = POST_EVENT_SECONDS * CAMERA_CONFIGS[cam_index]["FPS_LIMITER"]
                 else:
-                    post_event_frames = POST_EVENT_SECONDS * CAMERA_CONFIGS[cam_index]["FPS"]
+                    if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
+                        post_event_frames = POST_EVENT_SECONDS * CAMERA_CONFIGS[cam_index]["FPS_LIMITER"]
+                    else:
+                        post_event_frames = POST_EVENT_SECONDS * CAMERA_CONFIGS[cam_index]["FPS"]
 
-                if post_motion_frame_count_array[cam_index] == post_event_frames:
-                    logger.info(f"[{cam_name}] Post motion frame count reached")
-                    frames_copy = frames_array[cam_index].copy()
-                    threading.Thread(target=write_and_upload_video, args=(cam_index, frames_copy, video_start_datetime_string_array[cam_index])).start()
+                    # if enaugh frames reached in POST_RECORDING, trigger finalizing video and prepare for next motion detection
+                    if post_motion_frame_count_array[cam_index] == post_event_frames:
+                        logger.info(f"[{cam_name}] Post motion frame count reached")
+                        frames_copy = frames_array[cam_index].copy()
+                        threading.Thread(target=write_and_upload_video, args=(cam_index, frames_copy, video_start_datetime_string_array[cam_index])).start()
 
-                    previous_motion_pixels_array[cam_index] = 0
-                    motion_frames_array[cam_index] = 0
-                    no_motion_frames_array[cam_index] = 0
-                    frames_array[cam_index].clear()
+                        previous_motion_pixels_array[cam_index] = 0
+                        motion_frames_array[cam_index] = 0
+                        no_motion_frames_array[cam_index] = 0
+                        frames_array[cam_index].clear()
 
-                    state_array[cam_index] = State.DETECTING
+                        state_array[cam_index] = State.DETECTING
         
         if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
             frame_duration = dt.now().timestamp() - frame_timestamp
