@@ -213,7 +213,7 @@ def cam_worker(cam_index):
         if frame_counter_array[cam_index] > SKIP_FIRST_FRAMES: # stabilize frame detector
             if motion_pixels_array[cam_index] >= CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD"] and previous_motion_pixels_array[cam_index] >= CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD"]:
                 motion_frames_array[cam_index] += 1
-            elif motion_pixels_array[cam_index] >= CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD"] and previous_motion_pixels_array[cam_index] < CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD"]  
+            elif motion_pixels_array[cam_index] >= CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD"] and previous_motion_pixels_array[cam_index] < CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD"]:
                 motion_frames_array[cam_index] = 0
 
             elif motion_pixels_array[cam_index] < CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD"] and previous_motion_pixels_array[cam_index] < CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD"]:
