@@ -15,11 +15,14 @@ Quick start:
 2) Open ./src/config.json and edit as you want (cams, ftp server, ...)
 3) sudo bash ./install.sh
 
+Verify with:
+1) sudo systemctl status cat-monitoring
+2) sudo journalctl -u cat-monitoring.service -n 100 -f -g '' # for CAM1 log only for example, insert "\[CAM1\]" into ''
+
 Note: for Raspberry PI choose requirements-rpi.txt during running install script (you will be prompted)
 
 TODO ASAP:
-- Move global vars to local (those that make sense, mostly those related only to one full detection cycle)
-- Timestamp to videos
+- Timestamp to videos + text that will say (PRE-MOTION, MOTION or POST-MOTION)
 - Finish readme
 
 TODO later:
