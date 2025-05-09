@@ -21,6 +21,9 @@ Verify with:
 1) sudo systemctl status cat-monitoring
 2) sudo journalctl -u cat-monitoring.service -n 100 -f -g '' # for CAM1 log only for example, insert "\\[CAM1\\]" into ''
 
+KNOWN BUGS:
+- sometimes, video start with POST-MOTION tag, then hops into PRE-MOTION, then continues normally into MOTION and POST-MOTION, dunno why (note: CAM1_2025-05-09_21-09-24_495535.mp4)
+
 TODO ASAP:
 - Finish readme
 
