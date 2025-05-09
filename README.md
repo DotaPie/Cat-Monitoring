@@ -18,7 +18,7 @@ Quick start:
 Note: for Raspberry PI choose requirements-rpi.txt during running install script (you will be prompted)
 
 TODO ASAP:
-- Verify videos continuity, especially pre-buffer -> main buffer
+- Move global vars to local (those that make sense, mostly those related only to one full detection cycle)
 - Timestamp to videos
 - Finish readme
 
