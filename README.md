@@ -2,15 +2,25 @@
 
 WIP
 
-Linux only (currently tested on raspberry pi 4 only, but without LED it should work on any linux)
+Takes stream from N cams, detects motion on them, and if motion is detected takes couple of seconds before the motion, and together with frames during the motion and after motion, it sends it to FTP server.
+
+Linux only (currently tested on Raspberry PI 4 (4GB) only, but without LED it should work on any linux)
+
+Regarding performance, it takes about 50% CPU usage on Raspberry PI 4 when using 2x USB 2.0 CAM (640x480@10FPS)
+
+No live preview of cams (so far).
 
 Quick start:
 1) git clone https://github.com/DotaPie/cat-monitoring.git && cd ./cat-monitoring
 2) Open ./src/config.json and edit as you want (cams, ftp server, ...)
 3) sudo bash ./install.sh
 
-Note: for raspberry choose requirements-rpi.txt during running install script (will be prompted)
+Note: for Raspberry PI choose requirements-rpi.txt during running install script (you will be prompted)
 
-TODO:
-- Timestamp to videos
+TODO ASAP:
 - Verify videos continuity, especially pre-buffer -> main buffer
+- Timestamp to videos
+- Finish readme
+
+TODO later:
+- cams preview via web browser
