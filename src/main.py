@@ -66,7 +66,7 @@ CAM_COUNT = len(CAMERA_CONFIGS)
 
 ### GLOBALS ###
 cap_array = [None for _ in range(CAM_COUNT)]
-state_array = [State.DETECTING for _ in range(CAM_COUNT)]
+state_array = [State.NONE for _ in range(CAM_COUNT)]
 stop_event = threading.Event()
 
 ### FUNCTIONS ###
@@ -273,6 +273,7 @@ def cam_worker(cam_index):
     no_motion_frames = 0
     video_start_datetime_string = ""
     frame_counter = 0
+    state_array[cam_index] = State.DETECTING
 
     if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
         frame_duration_expected = 1.0 / float(CAMERA_CONFIGS[cam_index]["FPS_LIMITER"])
