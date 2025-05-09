@@ -10,29 +10,29 @@
 
 set -euo pipefail
 
-# ─── 1. Variables you might tweak ─────────────────────────────────────
+# 1. Variables you might tweak 
 RUN_USER="${SUDO_USER:-$USER}"                       # non-root account
 INSTALL_DIR="/opt/CatMonitoring"
 SERVICE_FILE="/etc/systemd/system/cat-monitoring.service"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"          # dir of this script
 
-# ─── 2. Install system packages ───────────────────────────────────────
-echo "===> Updating APT index and installing python3-pip, libgl1 …"
+# 2. Install system packages 
+echo "===> Updating APT index and installing python3-pip, libgl1 ..."
 apt update
 apt install -y python3-pip libgl1
 
-# ─── 3. Lay out directory tree ────────────────────────────────────────
+# 3. Lay out directory tree 
 echo "===> Creating ${INSTALL_DIR}/..."
 mkdir -p "${INSTALL_DIR}"/{logs,videos,venv}
 chown -R "${RUN_USER}:${RUN_USER}" "${INSTALL_DIR}"/{logs,videos}
 chmod 750 "${INSTALL_DIR}"/{logs,videos}
 
-# ─── 4. Copy runtime files (no requirements files) ────────────────────
+# 4. Copy runtime files (no requirements files) 
 echo "===> Copying runtime files to ${INSTALL_DIR}/"
-cp "${SCRIPT_DIR}"/{config.json,logging_setup.py,main.py} "${INSTALL_DIR}/"
+cp "${SCRIPT_DIR}"/src/{config.json,logging_setup.py,main.py} "${INSTALL_DIR}/"
 
-# ─── 5. Virtual environment + dependency install ─────────────────────
-echo "===> Creating Python virtual environment …"
+# 5. Virtual environment + dependency install 
+echo "===> Creating Python virtual environment ..."
 python3 -m venv "${INSTALL_DIR}/venv"
 # shellcheck disable=SC1091
 source "${INSTALL_DIR}/venv/bin/activate"
@@ -52,12 +52,12 @@ if [[ ! -f "$REQ_PATH" ]]; then
     exit 1
 fi
 
-echo "===> Installing Python dependencies from ${REQ_PATH} …"
+echo "===> Installing Python dependencies from ${REQ_PATH} ..."
 pip install -r "$REQ_PATH"
 deactivate
 
-# ─── 6. Create systemd unit ───────────────────────────────────────────
-echo "===> Writing systemd unit to ${SERVICE_FILE} …"
+# 6. Create systemd unit
+echo "===> Writing systemd unit to ${SERVICE_FILE} ..."
 cat <<'UNIT' > "$SERVICE_FILE"
 [Unit]
 Description=Cat Monitoring
@@ -83,8 +83,8 @@ UNIT
 # Replace the placeholder username with the real invoking user
 sed -i "s/^User=.*/User=${RUN_USER}/" "$SERVICE_FILE"
 
-# ─── 7. Enable & start the service ────────────────────────────────────
-echo "===> Enabling and starting cat-monitoring.service …"
+# 7. Enable & start the service
+echo "===> Enabling and starting cat-monitoring.service ..."
 systemctl daemon-reload
 systemctl enable cat-monitoring
 systemctl start  cat-monitoring

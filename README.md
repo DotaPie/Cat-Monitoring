@@ -6,12 +6,11 @@ Linux only (currently tested on raspberry pi 4 only, but without LED it should w
 
 Quick start:
 1) git clone https://github.com/DotaPie/cat-monitoring.git
-2) edit ./cat-monitoring/config.json (cams, ftp server, ...)
-3) sudo bash ./cat-monitoring/src/install.sh
+2) edit ./cat-monitoring/src/config.json (cams, ftp server, ...)
+3) sudo bash ./cat-monitoring/install.sh
 
 Note: for raspberry choose requirements-rpi.txt during running install script (will be prompted)
 
 TODO:
 - Timestamp to videos
 - Verify videos continuity, especially pre-buffer -> main buffer
-- GPIO not clearing properly when service is restarted
