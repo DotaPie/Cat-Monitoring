@@ -2,6 +2,10 @@
 
 Takes stream from N cameras. If motion is detected, video is saved locally or uploaded to FTP server (can do one or another, or both).
 
+<p align="center">
+  <img src="https://github.com/DotaPie/cat-monitoring/blob/main/cat.gif" width="600" alt="Usage preview">
+</p>
+
 ## Quick start
 ```
 git clone https://github.com/DotaPie/cat-monitoring.git && cd ./cat-monitoring
