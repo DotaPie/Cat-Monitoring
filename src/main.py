@@ -42,6 +42,7 @@ with open(os.path.join(os.path.dirname((os.path.abspath(__file__))), "config.jso
 
 VIDEO_PATH_IN_RAM = "/dev/shm/CatMonitoring/videos"
 
+FTP_UPLOAD_VIDEO = config["FTP_UPLOAD_VIDEO"]
 FTP_SERVER_TYPE = config["FTP_SERVER_TYPE"]
 FTP_HOSTNAME = config["FTP_HOSTNAME"]
 FTP_USERNAME = config["FTP_USERNAME"]
@@ -143,10 +144,11 @@ def write_and_upload_video(cam_index, frame_buffer_copy, frames_copy, video_star
     out.release()
     logger.info(f"[{cam_name}] Video saved as {full_file_path} ({(dt.now().timestamp() - timestamp) * 1000:.3f}ms)")
 
-    try:
-        ftp_upload_file(full_file_path)
-    except Exception as e:
-        logger.exception(f"[FTP] Failed to upload file {full_file_path} ({e})")
+    if FTP_UPLOAD_VIDEO:
+        try:
+            ftp_upload_file(full_file_path)
+        except Exception as e:
+            logger.exception(f"[FTP] Failed to upload file {full_file_path} ({e})")
 
     if SAVE_VIDEO_LOCALLY:
         shutil.copy2(full_file_path, os.path.join(VIDEO_PATH, file_name))
