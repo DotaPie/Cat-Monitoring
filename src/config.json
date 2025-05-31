@@ -30,7 +30,7 @@
         "FPS_LIMITER": 10,
         "FRAME_WIDTH": 640,
         "FRAME_HEIGHT": 480,
-        "DETECTION_THRESHOLD": 2000
+        "DETECTION_THRESHOLD": 1500
     },
 
     "CAM2":{
@@ -39,6 +39,6 @@
         "FPS_LIMITER": 10,
         "FRAME_WIDTH": 640,
         "FRAME_HEIGHT": 480,
-        "DETECTION_THRESHOLD": 2000
+        "DETECTION_THRESHOLD": 1500
     }
 }
