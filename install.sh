@@ -29,7 +29,7 @@ chmod 750 "${INSTALL_DIR}"/{logs,videos}
 
 # 4. Copy runtime files (no requirements files) 
 echo "===> Copying runtime files to ${INSTALL_DIR}/"
-cp "${SCRIPT_DIR}"/src/{config.json,logging_setup.py,main.py} "${INSTALL_DIR}/"
+cp "${SCRIPT_DIR}"/src/{config.json,logging_setup.py,main.py,hud.py} "${INSTALL_DIR}/"
 
 # 5. Virtual environment + dependency install 
 echo "===> Creating Python virtual environment ..."
@@ -58,16 +58,15 @@ deactivate
 
 # 6. Create systemd unit
 echo "===> Writing systemd unit to ${SERVICE_FILE} ..."
-cat <<'UNIT' > "$SERVICE_FILE"
+cat > "$SERVICE_FILE" <<UNIT
 [Unit]
 Description=Cat Monitoring
 After=network.target
 
 [Service]
-User=dotapie
-WorkingDirectory=/opt/CatMonitoring
-
-ExecStart=/opt/CatMonitoring/venv/bin/python3 /opt/CatMonitoring/main.py
+User=${RUN_USER}
+WorkingDirectory=${INSTALL_DIR}
+ExecStart=${INSTALL_DIR}/venv/bin/python3 ${INSTALL_DIR}/main.py
 
 Restart=on-failure
 RestartSec=5
@@ -79,9 +78,6 @@ StandardError=journal
 [Install]
 WantedBy=multi-user.target
 UNIT
-
-# Replace the placeholder username with the real invoking user
-sed -i "s/^User=.*/User=${RUN_USER}/" "$SERVICE_FILE"
 
 # 7. Enable & start the service
 echo "===> Enabling and starting cat-monitoring.service ..."
