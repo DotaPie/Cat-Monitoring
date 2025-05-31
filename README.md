@@ -24,8 +24,12 @@ Verify with:
 KNOWN BUGS:
 - sometimes, video start with POST-MOTION tag, then hops into PRE-MOTION, then continues normally into MOTION and POST-MOTION, dunno why (note: CAM1_2025-05-09_21-09-24_495535.mp4)
 
-TODO ASAP:
-- Finish readme
+TODO asap:
+- finish readme
+- create videos in /dev/shm/CatMonitoring/videos by default, change DELETE_VIDEO into SAVE_VIDEO_LOCALLY (use VIDEO_PATH here)
+    - change paths in installation script based on paths in configuration file (videos and logs)
+- figure out how not to trigger motion when cloud hides are unhides sun
 
-TODO later:
+TODO features:
 - cams preview via web browser
+- pushup notification (android, iphone, windows) when motion is detected (configurable and optional .. use https://ntfy.sh, up to 250 messages/day free)
