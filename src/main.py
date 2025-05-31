@@ -90,20 +90,23 @@ def ftp_join_path(*parts: AnyStr) -> str:
         path /= part
     return str(path)
 
-def get_YYMMDD():
-    return date.today().strftime("%Y%m%d")[2:]
+def get_YYYYMMDD():
+    today = date.today()
+    return today.strftime("%Y"), today.strftime("%m"), today.strftime("%d")
 
 def ftp_upload_file(full_file_path = None):
     ftp_server = ftplib.FTP(FTP_HOSTNAME, FTP_USERNAME, FTP_PASSWORD)
     ftp_server.encoding = "utf-8"
 
+    YYYY, MM, DD = get_YYYYMMDD()
+
     try:
-        ftpResponse = ftp_server.mkd(f"{ftp_join_path(FTP_PATH, get_YYMMDD())}") 
+        ftpResponse = ftp_server.mkd(f"{ftp_join_path(FTP_PATH, YYYY, MM, DD)}") 
         logger.info("[FTP] Creating directory ...")
     except:
         pass
 
-    ftp_full_file_path = ftp_join_path(FTP_PATH, get_YYMMDD(), os.path.basename(full_file_path))
+    ftp_full_file_path = ftp_join_path(FTP_PATH, YYYY, MM, DD, os.path.basename(full_file_path))
 
     if(full_file_path != None):
         with open(full_file_path, "rb") as f:
