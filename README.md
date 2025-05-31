@@ -36,7 +36,7 @@ sudo bash ./install.sh
 ```
 sudo systemctl status cat-monitoring
 sudo journalctl -u cat-monitoring.service -n 100 -f 
-sudo journalctl -u cat-monitoring.service -n 100 -f -g '\\[CAM1\\]'
+sudo journalctl -u cat-monitoring.service -n 100 -f -g '\[CAM1\]'
 ```
 
 ## TODO:
