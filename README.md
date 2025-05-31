@@ -9,9 +9,7 @@ Takes stream from N cameras. If motion is detected, video is saved locally or up
 git clone https://github.com/DotaPie/cat-monitoring.git && cd ./cat-monitoring
 ```
 >Open ./src/config.json and edit as you want (cams, ftp server, paths, ...)
->- if you want LED usage for Raspberry PI, choose requirements-rpi.txt during running install script (you will be prompted)
->- for any other option use requirements.txt
->- LED blinks if script is running, stays on when any movement detected on any camera
+>- if STATUS_LED_RPI is true, different requiremenets-rpi.txt is used instead of requiremenets.txt during installation
 
 ```
 sudo bash ./install.sh
