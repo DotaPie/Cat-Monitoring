@@ -2,20 +2,20 @@
 
 Takes stream from N cameras. If motion is detected, video is saved locally or uploaded to FTP server (can do one or another, or both).
 
-## Hardware requirements
+# Hardware requirements
     - RAM: 1GB (recommended)
     - CPU: At least performance of Raspberry PI 4 (recommended) 
         - it takes about 50% CPU usage on Raspberry PI 4, when using 2x USB 2.0 camera (640x480@10FPS)
     - GPU: not needed
     - Camera: any USB camera/-s
 
-## OS requirements: 
+# OS requirements: 
     - debian based linux
     - pre-installed python3.11 or higher
     - mounted /dev/shm with at least 512MB (should be already there on most modern linux distros)
     - GUI not needed
 
-## FTP server requirements (optional, if saving videos only locally):
+# FTP server requirements (optional, if saving videos only locally):
     - any FTP/FTPS running server with default port 21 and default port range for FTPS
         - tested on linux (FTPS), but it should also work on windows
 
