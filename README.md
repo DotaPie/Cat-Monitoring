@@ -9,7 +9,7 @@ Takes stream from N cameras. If motion is detected, video is saved locally or up
 git clone https://github.com/DotaPie/cat-monitoring.git && cd ./cat-monitoring
 ```
 >Open ./src/config.json and edit as you want (cams, ftp server, paths, ...)
->- if STATUS_LED_RPI is true, different requiremenets-rpi.txt is used instead of requiremenets.txt during installation
+>- if STATUS_LED_RPI is true, requirements-rpi.txt is used instead of requirements.txt during installation
 
 ```
 sudo bash ./install.sh
