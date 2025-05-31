@@ -40,7 +40,7 @@ sudo journalctl -u cat-monitoring.service -n 100 -f -g '\[CAM1\]'
 ```
 
 ## TODO:
-- figure out how not to trigger motion when cloud hides are unhides sun (wip - testing)
+- figure out how not to trigger motion when sun hides behind cloud (or pops out of the cloud) (wip - testing)
 - cameras preview via web browser
 - pushup notification (android, iphone, windows) when motion is detected (configurable and optional .. use https://ntfy.sh, up to 250 messages/day free)
 
