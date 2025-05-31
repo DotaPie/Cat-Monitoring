@@ -19,6 +19,8 @@ from typing import AnyStr
 import sys
 import signal
 
+from hud import draw_hud
+
 ### ENUMS ###
 class State(Enum):
     NONE = 0
@@ -41,7 +43,9 @@ FTP_SERVER_TYPE = config["FTP_SERVER_TYPE"]
 FTP_HOSTNAME = config["FTP_HOSTNAME"]
 FTP_USERNAME = config["FTP_USERNAME"]
 FTP_PASSWORD = config["FTP_PASSWORD"]
-FTP_PATH = config["FTP_PATH"] # NOTE: this assumes FTP server is running same OS type as CatMonitoring is running on (Linux -> Linux, Windows -> Windows, ...)
+FTP_PATH = config["FTP_PATH"]
+
+print(FTP_SERVER_TYPE, FTP_HOSTNAME, FTP_USERNAME, FTP_PASSWORD, FTP_PATH)
 
 VIDEO_PATH = Path(os.path.expandvars(config["VIDEO_PATH"])).expanduser() # deals with $USER and ~/...
 DELETE_VIDEO = config["DELETE_VIDEO"]
@@ -53,7 +57,7 @@ NUMBER_OF_FRAMES_WITH_NO_MOTION = config["NUMBER_OF_FRAMES_WITH_NO_MOTION"] # re
 SKIP_FIRST_FRAMES = config["SKIP_FIRST_FRAMES"]
 
 STATUS_LED = config["STATUS_LED"]
-if STATUS_LED == True:
+if STATUS_LED:
     import RPi.GPIO as GPIO
     STATUS_LED_GPIO_PIN = config["STATUS_LED_GPIO_PIN"]
 
@@ -140,8 +144,8 @@ def write_and_upload_video(cam_index, frame_buffer_copy, frames_copy, video_star
 
     try:
         ftp_upload_file(full_file_path)
-    except Exception:
-        logger.exception(f"[FTP] Failed to upload file {full_file_path}")
+    except Exception as e:
+        logger.exception(f"[FTP] Failed to upload file {full_file_path} ({e})")
 
     if DELETE_VIDEO:
         os.remove(full_file_path)
@@ -160,100 +164,6 @@ def is_no_motion(cam_index, motion_pixels, no_motion_frames):
     
     return False
 
-def draw_hud_labels(frame,
-                    bl: str,          # bottom-left  (required)
-                    br: str,          # bottom-right (required)
-                    tl: str = "",     # top-left
-                    tr: str = "",     # top-right
-                    height_ratio:   float = 0.05,
-                    max_width_ratio: float = 0.45,
-                    margin_ratio:    float = 0.02,
-                    font = cv2.FONT_HERSHEY_SIMPLEX,
-                    color_fg = (255, 255, 255),   # white
-                    color_bg = (0, 0, 0),         # black
-                    thickness: int = 2,
-                    bg_extra: int = 4):            # outline
-   
-    h, w = frame.shape[:2]
-    margin = int(h * margin_ratio)
-
-    # helper (width, height, baseline) at a given scale
-    def _metrics(text, scale):
-        (tw, th), base = cv2.getTextSize(text, font, scale, thickness)
-        return tw, th, base
-
-    # helper: draw outlined text
-    def _draw(text, x, y, scale):
-        if not text:
-            return
-        cv2.putText(frame, text, (x, y), font,
-                    scale, color_bg, thickness + bg_extra, cv2.LINE_AA)
-        cv2.putText(frame, text, (x, y), font,
-                    scale, color_fg, thickness, cv2.LINE_AA)
-
-    # 1 base scale from desired glyph height
-    ((_, glyph_h), _) = cv2.getTextSize("Hg", font, 1, thickness)
-    base_scale = (h * height_ratio) / glyph_h
-
-    # 2 collect metrics for every non-empty label
-    labels = {"TL": tl, "TR": tr, "BL": bl, "BR": br}
-    data = {}
-    for key, txt in labels.items():
-        s = base_scale
-        tw, th, base = _metrics(txt, s)
-
-        # width cap only applies to opposite-side pairs
-        if key in ("TL", "TR", "BL", "BR") and tw > w * max_width_ratio:
-            s *= (w * max_width_ratio) / tw
-            tw, th, base = _metrics(txt, s)
-
-        data[key] = dict(scale=s, width=tw, height=th, base=base)
-
-    # 3 shrink top pair together if they'd collide
-    total_top_w = data["TL"]["width"] + data["TR"]["width"] + 3 * margin
-    if total_top_w > w:
-        factor = (w - 3 * margin) / (data["TL"]["width"] + data["TR"]["width"])
-        for key in ("TL", "TR"):
-            s = data[key]["scale"] * factor
-            tw, th, base = _metrics(labels[key], s)
-            data[key].update(scale=s, width=tw, height=th, base=base)
-
-    # 4 shrink bottom pair together if they'd collide
-    total_bot_w = data["BL"]["width"] + data["BR"]["width"] + 3 * margin
-    if total_bot_w > w:
-        factor = (w - 3 * margin) / (data["BL"]["width"] + data["BR"]["width"])
-        for key in ("BL", "BR"):
-            s = data[key]["scale"] * factor
-            tw, th, base = _metrics(labels[key], s)
-            data[key].update(scale=s, width=tw, height=th, base=base)
-
-    # 5 render
-    # top-left: y = margin + text-height  (keeps glyph top == margin)
-    _draw(tl,
-          margin,
-          margin + data["TL"]["height"],
-          data["TL"]["scale"])
-
-    # top-right
-    _draw(tr,
-          w - data["TR"]["width"] - margin,
-          margin + data["TR"]["height"],
-          data["TR"]["scale"])
-
-    # bottom-left: y = frame-height − baseline − margin
-    _draw(bl,
-          margin,
-          h - data["BL"]["base"] - margin,
-          data["BL"]["scale"])
-
-    # bottom-right
-    _draw(br,
-          w - data["BR"]["width"] - margin,
-          h - data["BR"]["base"] - margin,
-          data["BR"]["scale"])
-
-    return frame
-
 def cam_worker(cam_index):
     cam_name = CAMERA_CONFIGS[cam_index]["NAME"]
 
@@ -265,7 +175,7 @@ def cam_worker(cam_index):
     frame_buffer = deque(maxlen = buffer_frames)
     frame_buffer_copy = []
     frames = []
-    background_subtractor = cv2.createBackgroundSubtractorMOG2(history=100, varThreshold=50)
+    background_subtractor = cv2.createBackgroundSubtractorMOG2(history=100, varThreshold=50, detectShadows=True)
     post_motion_frame_count = 0
     motion_pixels = 0
     previous_motion_pixels = 0
@@ -291,13 +201,14 @@ def cam_worker(cam_index):
         
         frame_counter += 1
 
-        # Detect motion on frame without text
-        fg_mask = background_subtractor.apply(frame)
-        _, thresh = cv2.threshold(fg_mask, 25, 255, cv2.THRESH_BINARY)
+        fg_mask = background_subtractor.apply(frame, learningRate=0.01)
+        fg_mask[fg_mask == 127] = 0
+        _, thresh = cv2.threshold(fg_mask, 200, 255, cv2.THRESH_BINARY)
+
         motion_pixels = int(np.sum(thresh) / 255)
         logger.debug(f"[{cam_name}] Frame #{frame_counter} -> {motion_pixels} px")
 
-        frame = draw_hud_labels(frame, state_string[state_array[cam_index]], dt.now().strftime("%H:%M:%S.%f")[:-3], cam_name, "")
+        frame = draw_hud(frame, state_string[state_array[cam_index]], dt.now().strftime("%H:%M:%S.%f")[:-3], cam_name, "")
         frame_buffer.append(frame.copy())
 
         if frame_counter > SKIP_FIRST_FRAMES: # stabilize frame detector
@@ -348,7 +259,7 @@ def cam_worker(cam_index):
                         logger.info(f"[{cam_name}] Post motion frame count reached")
                         frames_copy = frames.copy()
                         threading.Thread(target=write_and_upload_video, args=(cam_index, frame_buffer_copy, frames_copy, video_start_datetime_string)).start()
-
+                        
                         previous_motion_pixels = 0
                         motion_frames = 0
                         no_motion_frames = 0
@@ -389,8 +300,8 @@ def cam_loop(cam_index):
         if stop_event.is_set():
             return
  
-        logger.info(f"[{cam_name}] Re-opening cv2 cap in 15 seconds ...")
-        time.sleep(15)
+        logger.info(f"[{cam_name}] Re-opening cv2 cap in 2 seconds ...")
+        time.sleep(2)
         init_cam(cam_index)
 
 
@@ -466,6 +377,8 @@ def main():
 
         if STATUS_LED:
             led_t.join()
+            GPIO.output(STATUS_LED_GPIO_PIN, GPIO.LOW)
+            GPIO.cleanup() 
             logger.info("[LED] Shutdown of LED completed")       
 
         for cam_index in range(CAM_COUNT):
@@ -473,9 +386,7 @@ def main():
 
             threads[cam_index].join()
             logger.info(f"[{cam_name}] Shutdown of camera worker completed")
-
-        GPIO.output(STATUS_LED_GPIO_PIN, GPIO.LOW)
-        GPIO.cleanup()                   
+                              
         sys.exit(0)
 
     for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
