@@ -58,10 +58,10 @@ NUMBER_OF_FRAMES_WITH_MOTION = config["NUMBER_OF_FRAMES_WITH_MOTION"] # recommen
 NUMBER_OF_FRAMES_WITH_NO_MOTION = config["NUMBER_OF_FRAMES_WITH_NO_MOTION"] # recommended min. 3
 SKIP_FIRST_FRAMES = config["SKIP_FIRST_FRAMES"]
 
-STATUS_LED = config["STATUS_LED"]
-if STATUS_LED:
+STATUS_LED_RPI = config["STATUS_LED_RPI"]
+if STATUS_LED_RPI:
     import RPi.GPIO as GPIO
-    STATUS_LED_GPIO_PIN = config["STATUS_LED_GPIO_PIN"]
+    STATUS_LED_GPIO_PIN_RPI = config["STATUS_LED_GPIO_PIN_RPI"]
 
 CAMERA_CONFIGS = [
     {"NAME": cam_name, **cam_config}
@@ -352,7 +352,7 @@ def init_cams():
 
 def init_LED():
     GPIO.setmode(GPIO.BCM) 
-    GPIO.setup(STATUS_LED_GPIO_PIN, GPIO.OUT)
+    GPIO.setup(STATUS_LED_GPIO_PIN_RPI, GPIO.OUT)
 
 def handle_LED():
     while not stop_event.is_set():
@@ -364,12 +364,12 @@ def handle_LED():
                 break
 
         if motion:
-            GPIO.output(STATUS_LED_GPIO_PIN, GPIO.HIGH) 
+            GPIO.output(STATUS_LED_GPIO_PIN_RPI, GPIO.HIGH) 
             time.sleep(0.5)
         else:
-            GPIO.output(STATUS_LED_GPIO_PIN, GPIO.HIGH) 
+            GPIO.output(STATUS_LED_GPIO_PIN_RPI, GPIO.HIGH) 
             time.sleep(0.125)
-            GPIO.output(STATUS_LED_GPIO_PIN, GPIO.LOW) 
+            GPIO.output(STATUS_LED_GPIO_PIN_RPI, GPIO.LOW) 
             time.sleep(0.375)       
 
 def init_storage_in_ram():
@@ -381,16 +381,16 @@ def main():
     os.makedirs(VIDEO_PATH, exist_ok=True)
 
     threads = []
-    if STATUS_LED:
+    if STATUS_LED_RPI:
         led_t = None
 
     def shutdown(signum, frame):
         logger.info(f"[MAIN] Signal {signum} received - shutting down")
         stop_event.set()                 
 
-        if STATUS_LED:
+        if STATUS_LED_RPI:
             led_t.join()
-            GPIO.output(STATUS_LED_GPIO_PIN, GPIO.LOW)
+            GPIO.output(STATUS_LED_GPIO_PIN_RPI, GPIO.LOW)
             GPIO.cleanup() 
             logger.info("[LED] Shutdown of LED completed")       
 
@@ -416,7 +416,7 @@ def main():
         t.start()
         threads.append(t)
 
-    if STATUS_LED:
+    if STATUS_LED_RPI:
         logger.info("[LED] Init LED ...")
         init_LED()
         logger.info("[LED] Starting LED handler ...")

@@ -4,26 +4,26 @@
     "LOGGING_FILE_NAME": "catmonitoring.log",
     "LOGGING_FILE_COUNT": 30,
     "LOGGING_ROLLOVER_TIME": "midnight",
-    "LOGGING_PATH": "/var/log/CatMonitoring", 
+    "LOGGING_PATH": "/var/log/CatMonitoring",
 
-    "FTP_UPLOAD_VIDEO": true,
+    "FTP_UPLOAD_VIDEO": false,
     "FTP_SERVER_TYPE": "linux",
-    "FTP_HOSTNAME": "192.168.1.175",
-    "FTP_USERNAME": "ftp-general",
-    "FTP_PASSWORD": "sa)7@}do",
-    "FTP_PATH": "/CatMonitoring/CatMonitoring", 
+    "FTP_HOSTNAME": "HOST",
+    "FTP_USERNAME": "USERNAME",
+    "FTP_PASSWORD": "PWD",
+    "FTP_PATH": "/Some/Path", 
 
     "SAVE_VIDEO_LOCALLY": false,
     "VIDEO_PATH": "/opt/CatMonitoring/videos",
-    
+     
     "BUFFER_SECONDS": 5,
     "POST_EVENT_SECONDS": 5,
     "NUMBER_OF_FRAMES_WITH_MOTION": 5,
     "NUMBER_OF_FRAMES_WITH_NO_MOTION": 5,
     "SKIP_FIRST_FRAMES": 50,
 
-    "STATUS_LED": false,
-    "STATUS_LED_GPIO_PIN": 13,
+    "STATUS_LED_RPI": false,
+    "STATUS_LED_GPIO_PIN_RPI": 13,
 
     "CAM1":{
         "DEVICE_PATH": "/dev/v4l/by-path/platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.4:1.0-video-index0",
