@@ -13,7 +13,7 @@
     "FTP_PATH": "/CatMonitoring/CatMonitoring", 
 
     "VIDEO_PATH": "/opt/CatMonitoring/videos",
-    "DELETE_VIDEO": true,
+    "SAVE_VIDEO_LOCALLY": true,
      
     "BUFFER_SECONDS": 5,
     "POST_EVENT_SECONDS": 5,

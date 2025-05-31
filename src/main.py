@@ -18,6 +18,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import AnyStr
 import sys
 import signal
+import shutil
 
 from hud import draw_hud
 
@@ -39,6 +40,8 @@ state_string = {
 with open(os.path.join(os.path.dirname((os.path.abspath(__file__))), "config.json"), "r") as f:
     config = json.load(f)
 
+VIDEO_PATH_IN_RAM = "/dev/shm/CatMonitoring/videos"
+
 FTP_SERVER_TYPE = config["FTP_SERVER_TYPE"]
 FTP_HOSTNAME = config["FTP_HOSTNAME"]
 FTP_USERNAME = config["FTP_USERNAME"]
@@ -48,7 +51,7 @@ FTP_PATH = config["FTP_PATH"]
 print(FTP_SERVER_TYPE, FTP_HOSTNAME, FTP_USERNAME, FTP_PASSWORD, FTP_PATH)
 
 VIDEO_PATH = Path(os.path.expandvars(config["VIDEO_PATH"])).expanduser() # deals with $USER and ~/...
-DELETE_VIDEO = config["DELETE_VIDEO"]
+SAVE_VIDEO_LOCALLY = config["SAVE_VIDEO_LOCALLY"]
 
 BUFFER_SECONDS = config["BUFFER_SECONDS"]
 POST_EVENT_SECONDS = config["POST_EVENT_SECONDS"]
@@ -124,7 +127,7 @@ def write_and_upload_video(cam_index, frame_buffer_copy, frames_copy, video_star
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 
     file_name = f"{cam_name}_{video_start_datetime_string}.mp4"
-    full_file_path = os.path.join(VIDEO_PATH, file_name)
+    full_file_path = os.path.join(VIDEO_PATH_IN_RAM, file_name)
 
     if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
         video_fps = CAMERA_CONFIGS[cam_index]["FPS_LIMITER"]
@@ -147,8 +150,10 @@ def write_and_upload_video(cam_index, frame_buffer_copy, frames_copy, video_star
     except Exception as e:
         logger.exception(f"[FTP] Failed to upload file {full_file_path} ({e})")
 
-    if DELETE_VIDEO:
-        os.remove(full_file_path)
+    if SAVE_VIDEO_LOCALLY:
+        shutil.copy2(full_file_path, os.path.join(VIDEO_PATH, file_name))
+        
+    os.remove(full_file_path)
 
 def is_motion(cam_index, motion_pixels, motion_frames):
     # I am doing -1, because now it needs +1 motion_frame to trigger (because of how "motion_frames += 1" is triggered) 
@@ -364,6 +369,11 @@ def handle_LED():
             GPIO.output(STATUS_LED_GPIO_PIN, GPIO.LOW) 
             time.sleep(0.375)       
 
+def init_storage_in_ram():
+    if os.path.isdir(VIDEO_PATH_IN_RAM):
+        shutil.rmtree(VIDEO_PATH_IN_RAM)
+    os.makedirs(VIDEO_PATH_IN_RAM, exist_ok=True)
+
 def main():
     os.makedirs(VIDEO_PATH, exist_ok=True)
 
@@ -393,6 +403,7 @@ def main():
         signal.signal(sig, shutdown)
 
     init_cams()
+    init_storage_in_ram()
 
     for cam_index in range(CAM_COUNT):   
         cam_name = CAMERA_CONFIGS[cam_index]["NAME"]

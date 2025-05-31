@@ -7,31 +7,41 @@
 # beside the installer, and registers a systemd service that runs as
 # the invoking (non-root) user.
 ########################################################################
-
 set -euo pipefail
 
-# 1. Variables you might tweak 
+# 1. Variables you might tweak
 RUN_USER="${SUDO_USER:-$USER}"                       # non-root account
 INSTALL_DIR="/opt/CatMonitoring"
 SERVICE_FILE="/etc/systemd/system/cat-monitoring.service"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"          # dir of this script
+CONFIG_JSON="${SCRIPT_DIR}/src/config.json"          # config file to read
 
-# 2. Install system packages 
-echo "===> Updating APT index and installing python3-pip, libgl1 ..."
+# Ensure the config file is present before we go any further
+if [[ ! -f "$CONFIG_JSON" ]]; then
+    echo "ERROR: $CONFIG_JSON not found. Aborting." >&2
+    exit 1
+fi
+
+# 2. Install system packages
+echo "===> Updating APT index and installing python3-pip, libgl1, jq ..."
 apt update
-apt install -y python3-pip libgl1
+apt install -y python3-pip libgl1 jq
 
-# 3. Lay out directory tree 
-echo "===> Creating ${INSTALL_DIR}/..."
-mkdir -p "${INSTALL_DIR}"/{logs,videos,venv}
-chown -R "${RUN_USER}:${RUN_USER}" "${INSTALL_DIR}"/{logs,videos}
-chmod 750 "${INSTALL_DIR}"/{logs,videos}
+# 3. Resolve log / video paths from config.json and create them
+LOGGING_PATH=$(jq -r '.LOGGING_PATH' "$CONFIG_JSON")
+VIDEO_PATH=$(jq -r '.VIDEO_PATH'   "$CONFIG_JSON")
 
-# 4. Copy runtime files (no requirements files) 
+echo "===> Creating paths from config.json ..."
+mkdir -p "$LOGGING_PATH" "$VIDEO_PATH"
+chown -R "${RUN_USER}:${RUN_USER}" "$LOGGING_PATH" "$VIDEO_PATH"
+chmod 750 "$LOGGING_PATH" "$VIDEO_PATH"
+
+# 4. Copy runtime files (no requirements files)
 echo "===> Copying runtime files to ${INSTALL_DIR}/"
-cp "${SCRIPT_DIR}"/src/{config.json,logging_setup.py,main.py,hud.py} "${INSTALL_DIR}/"
+mkdir -p "$INSTALL_DIR"
+cp "${SCRIPT_DIR}"/src/{config.json,logging_setup.py,main.py,hud.py} "$INSTALL_DIR/"
 
-# 5. Virtual environment + dependency install 
+# 5. Virtual environment + dependency install
 echo "===> Creating Python virtual environment ..."
 python3 -m venv "${INSTALL_DIR}/venv"
 # shellcheck disable=SC1091
@@ -85,5 +95,5 @@ systemctl daemon-reload
 systemctl enable cat-monitoring
 systemctl start  cat-monitoring
 
-echo -e "\nAll done! Check the service status with:"
+echo -e "\nAll done!  Check the service status with:"
 echo "    sudo systemctl status cat-monitoring"
