@@ -24,7 +24,8 @@ sudo bash ./install.sh
 
 ## OS requirements: 
 - debian based linux
-- pre-installed python3.11 or higher
+- installed python3.11 or higher
+- installed git
 - mounted /dev/shm with at least 512MB (should be already there on most modern linux distros)
 - GUI not needed
 
