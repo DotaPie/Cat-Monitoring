@@ -174,4 +174,3 @@ cython_debug/
 .pypirc
 
 # My ignores
-re-deploy.sh

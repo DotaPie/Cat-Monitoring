@@ -48,8 +48,6 @@ FTP_USERNAME = config["FTP_USERNAME"]
 FTP_PASSWORD = config["FTP_PASSWORD"]
 FTP_PATH = config["FTP_PATH"]
 
-print(FTP_SERVER_TYPE, FTP_HOSTNAME, FTP_USERNAME, FTP_PASSWORD, FTP_PATH)
-
 VIDEO_PATH = Path(os.path.expandvars(config["VIDEO_PATH"])).expanduser() # deals with $USER and ~/...
 SAVE_VIDEO_LOCALLY = config["SAVE_VIDEO_LOCALLY"]
 
