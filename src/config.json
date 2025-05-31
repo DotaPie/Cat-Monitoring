@@ -1,10 +1,10 @@
 {
-    "LOGGING_PATH": "/var/log/CatMonitoring", 
     "LOGGING_LEVEL": "INFO",
     "LOGGING_ROOT_LEVEL": "WARNING",
     "LOGGING_FILE_NAME": "catmonitoring.log",
     "LOGGING_FILE_COUNT": 30,
     "LOGGING_ROLLOVER_TIME": "midnight",
+    "LOGGING_PATH": "/var/log/CatMonitoring", 
 
     "FTP_UPLOAD_VIDEO": true,
     "FTP_SERVER_TYPE": "linux",
@@ -13,16 +13,16 @@
     "FTP_PASSWORD": "sa)7@}do",
     "FTP_PATH": "/CatMonitoring/CatMonitoring", 
 
+    "SAVE_VIDEO_LOCALLY": false,
     "VIDEO_PATH": "/opt/CatMonitoring/videos",
-    "SAVE_VIDEO_LOCALLY": true,
-     
+    
     "BUFFER_SECONDS": 5,
     "POST_EVENT_SECONDS": 5,
     "NUMBER_OF_FRAMES_WITH_MOTION": 5,
     "NUMBER_OF_FRAMES_WITH_NO_MOTION": 5,
     "SKIP_FIRST_FRAMES": 50,
 
-    "STATUS_LED": true,
+    "STATUS_LED": false,
     "STATUS_LED_GPIO_PIN": 13,
 
     "CAM1":{
