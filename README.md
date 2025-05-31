@@ -19,16 +19,18 @@ Note: for Raspberry PI choose requirements-rpi.txt during running install script
 
 Verify with:
 1) sudo systemctl status cat-monitoring
-2) sudo journalctl -u cat-monitoring.service -n 100 -f -g '' # for CAM1 log only for example, insert "\\[CAM1\\]" into ''
+2) sudo journalctl -u cat-monitoring.service -n 100 -f # check logs
+2) sudo journalctl -u cat-monitoring.service -n 100 -f -g '\\[CAM1\\]' # check logs only for CAM1
 
 KNOWN BUGS:
 - sometimes, video start with POST-MOTION tag, then hops into PRE-MOTION, then continues normally into MOTION and POST-MOTION, dunno why (note: CAM1_2025-05-09_21-09-24_495535.mp4)
 
 TODO asap:
+- figure out how not to trigger motion when cloud hides are unhides sun (work in progress - testing)
 - finish readme
 - create videos in /dev/shm/CatMonitoring/videos by default, change DELETE_VIDEO into SAVE_VIDEO_LOCALLY (use VIDEO_PATH here)
     - change paths in installation script based on paths in configuration file (videos and logs)
-- figure out how not to trigger motion when cloud hides are unhides sun
+- generate uninstall.sh 
 
 TODO features:
 - cams preview via web browser
