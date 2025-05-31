@@ -10,7 +10,6 @@ git clone https://github.com/DotaPie/cat-monitoring.git && cd ./cat-monitoring
 ```
 >Open ./src/config.json and edit as you want (cams, ftp server, paths, ...)
 >- if STATUS_LED_RPI is true, requirements-rpi.txt is used instead of requirements.txt during installation
-
 ```
 sudo bash ./install.sh
 ```
