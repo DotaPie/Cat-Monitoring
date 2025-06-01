@@ -43,7 +43,6 @@ with open(os.path.join(os.path.dirname((os.path.abspath(__file__))), "config.jso
 VIDEO_PATH_IN_RAM = "/dev/shm/CatMonitoring/videos"
 
 FTP_UPLOAD_VIDEO = config["FTP_UPLOAD_VIDEO"]
-FTP_SERVER_TYPE = config["FTP_SERVER_TYPE"]
 FTP_HOSTNAME = config["FTP_HOSTNAME"]
 FTP_USERNAME = config["FTP_USERNAME"]
 FTP_PASSWORD = config["FTP_PASSWORD"]
@@ -76,44 +75,48 @@ state_array = [State.NONE for _ in range(CAM_COUNT)]
 stop_event = threading.Event()
 
 ### FUNCTIONS ###
-def ftp_join_path(*parts: AnyStr) -> str:
-    if FTP_SERVER_TYPE == "linux":
-        PathClass = PurePosixPath
-    elif FTP_SERVER_TYPE == "windows":
-        PathClass = PureWindowsPath
-    else:
-        logger.error("[FTP] FTP_SERVER_TYPE must be linux or windows, defaulting to linux")
-        PathClass = PurePosixPath
+def ftp_join_path(*parts) -> str:
+    return "/".join(str(p).strip("/\\") for p in parts)
 
-    path = PathClass(parts[0])
-    for part in parts[1:]:
-        path /= part
-    return str(path)
+def ensure_remote_dirs(ftp: ftplib.FTP, path: str) -> None:
+    original_cwd = ftp.pwd()
+    try:
+        for part in PurePosixPath(path).parts:
+            if part == "/":
+                continue
+            try:
+                ftp.mkd(part)                     # try to create this level
+            except ftplib.error_perm as e:
+                if not str(e).startswith("550"):  # 550 = already exists
+                    raise                        # re-raise unexpected errors
+            ftp.cwd(part)                        # descend into it
+    finally:
+        ftp.cwd(original_cwd)                    # restore working dir
 
 def get_YYYYMMDD():
     today = date.today()
     return today.strftime("%Y"), today.strftime("%m"), today.strftime("%d")
 
-def ftp_upload_file(full_file_path = None):
-    ftp_server = ftplib.FTP(FTP_HOSTNAME, FTP_USERNAME, FTP_PASSWORD)
-    ftp_server.encoding = "utf-8"
+def ftp_upload_file(full_file_path: str) -> None:
+    if full_file_path is None:
+        raise ValueError("full_file_path must be provided")
 
-    YYYY, MM, DD = get_YYYYMMDD()
+    # --- build remote paths -------------------------------------------------
+    YYYY, MM, DD = date.today().strftime("%Y %m %d").split()
+    remote_dir   = ftp_join_path(FTP_PATH, YYYY, MM, DD)
+    remote_file  = ftp_join_path(remote_dir, os.path.basename(full_file_path))
 
-    try:
-        ftpResponse = ftp_server.mkd(f"{ftp_join_path(FTP_PATH, YYYY, MM, DD)}") 
-        logger.info("[FTP] Creating directory ...")
-    except:
-        pass
+    # --- connect and upload -------------------------------------------------
+    with ftplib.FTP(FTP_HOSTNAME, FTP_USERNAME, FTP_PASSWORD) as ftp:
+        ftp.encoding = "utf-8"
 
-    ftp_full_file_path = ftp_join_path(FTP_PATH, YYYY, MM, DD, os.path.basename(full_file_path))
+        # create YYYY/MM/DD under FTP_PATH if needed
+        ensure_remote_dirs(ftp, remote_dir)
 
-    if(full_file_path != None):
-        with open(full_file_path, "rb") as f:
-            ftp_server.storbinary(f"STOR {ftp_full_file_path}", f) 
-            logger.info(f"[FTP] Uploaded file as {ftp_full_file_path}")
-
-    ftp_server.quit()
+        # transfer the file
+        with open(full_file_path, "rb") as src:
+            ftp.storbinary(f"STOR {remote_file}", src)
+            logger.info("[FTP] Uploaded %s", remote_file)
 
 def get_datetime_string(shiftSeconds=None):
     if shiftSeconds != None:

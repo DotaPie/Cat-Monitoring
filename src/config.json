@@ -7,7 +7,6 @@
     "LOGGING_PATH": "/var/log/CatMonitoring",
 
     "FTP_UPLOAD_VIDEO": false,
-    "FTP_SERVER_TYPE": "linux",
     "FTP_HOSTNAME": "HOST",
     "FTP_USERNAME": "USERNAME",
     "FTP_PASSWORD": "PWD",
