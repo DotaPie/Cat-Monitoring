@@ -28,7 +28,7 @@ sudo bash ./install.sh
 - mounted /dev/shm with at least 512MB (should be already there on most modern linux distros)
 - GUI not needed
 
-## FTP server requirements (optional, if saving videos only locally):
+## FTP server requirements (optional):
 - any FTP/FTPS running server with default port 21 and default port range for FTPS
     - tested on linux (FTPS), but it should also work on windows
 
