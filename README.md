@@ -26,7 +26,7 @@ sudo bash ./install.sh
 - debian based linux
 - installed python3.11 or higher
 - installed git
-- mounted /dev/shm with at least 512MB (should be already there on most modern linux distros)
+- mounted /dev/shm with at least 256MB (should be already there on most modern linux distros)
 - GUI not needed
 
 ## FTP server requirements (optional):
