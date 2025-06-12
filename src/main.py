@@ -100,6 +100,8 @@ def get_YYYYMMDD():
 def ftp_upload_file(full_file_path: str) -> None:
     if full_file_path is None:
         raise ValueError("full_file_path must be provided")
+    
+    timestamp = dt.now().timestamp()
 
     # --- build remote paths -------------------------------------------------
     YYYY, MM, DD = date.today().strftime("%Y %m %d").split()
@@ -116,7 +118,7 @@ def ftp_upload_file(full_file_path: str) -> None:
         # transfer the file
         with open(full_file_path, "rb") as src:
             ftp.storbinary(f"STOR {remote_file}", src)
-            logger.info("[FTP] Uploaded %s", remote_file)
+            logger.info(f"[FTP] Uploaded {remote_file} ({(dt.now().timestamp() - timestamp) * 1000:.3f}ms)")
 
 def get_datetime_string(shiftSeconds=None):
     if shiftSeconds != None:
@@ -148,6 +150,8 @@ def write_and_upload_video(cam_index, frame_buffer_copy, frames_copy, video_star
         out.write(frame)
 
     out.release()
+    time.sleep(0.5) # safety delay for flushing
+
     logger.info(f"[{cam_name}] Video saved as {full_file_path} ({(dt.now().timestamp() - timestamp) * 1000:.3f}ms)")
 
     if FTP_UPLOAD_VIDEO:
@@ -381,6 +385,9 @@ def init_storage_in_ram():
     os.makedirs(VIDEO_PATH_IN_RAM, exist_ok=True)
 
 def main():
+    logger.info(f"")
+    logger.info(f"")
+    logger.info(f"[MAIN] Init")
     os.makedirs(VIDEO_PATH, exist_ok=True)
 
     threads = []
