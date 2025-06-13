@@ -69,6 +69,13 @@ CAMERA_CONFIGS = [
 
 CAM_COUNT = len(CAMERA_CONFIGS)
 
+POST_EVENT_FRAMES = []
+for cam_index in range(len(CAMERA_CONFIGS)):
+    if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
+        POST_EVENT_FRAMES.append(POST_EVENT_SECONDS * CAMERA_CONFIGS[cam_index]["FPS_LIMITER"])
+    else:
+        POST_EVENT_FRAMES.append(POST_EVENT_SECONDS * CAMERA_CONFIGS[cam_index]["FPS"])
+
 ### GLOBALS ###
 cap_array = [None for _ in range(CAM_COUNT)]
 state_array = [State.NONE for _ in range(CAM_COUNT)]
@@ -100,6 +107,8 @@ def get_YYYYMMDD():
 def ftp_upload_file(full_file_path: str) -> None:
     if full_file_path is None:
         raise ValueError("full_file_path must be provided")
+    
+    timestamp = dt.now().timestamp()
 
     # --- build remote paths -------------------------------------------------
     YYYY, MM, DD = date.today().strftime("%Y %m %d").split()
@@ -116,7 +125,7 @@ def ftp_upload_file(full_file_path: str) -> None:
         # transfer the file
         with open(full_file_path, "rb") as src:
             ftp.storbinary(f"STOR {remote_file}", src)
-            logger.info("[FTP] Uploaded %s", remote_file)
+            logger.info(f"[FTP] Uploaded {remote_file} ({(dt.now().timestamp() - timestamp) * 1000:.3f}ms)")
 
 def get_datetime_string(shiftSeconds=None):
     if shiftSeconds != None:
@@ -130,6 +139,8 @@ def write_and_upload_video(cam_index, frame_buffer_copy, frames_copy, video_star
     logger.info(f"[{cam_name}] Saving video ...")
     timestamp = dt.now().timestamp()
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+
+    ensure_storage_in_ram()
 
     file_name = f"{cam_name}_{video_start_datetime_string}.mp4"
     full_file_path = os.path.join(VIDEO_PATH_IN_RAM, file_name)
@@ -148,6 +159,7 @@ def write_and_upload_video(cam_index, frame_buffer_copy, frames_copy, video_star
         out.write(frame)
 
     out.release()
+
     logger.info(f"[{cam_name}] Video saved as {full_file_path} ({(dt.now().timestamp() - timestamp) * 1000:.3f}ms)")
 
     if FTP_UPLOAD_VIDEO:
@@ -260,13 +272,8 @@ def cam_worker(cam_index):
                     no_motion_frames = 0 # prep. for no motion detection
                     state_array[cam_index] = State.RECORDING 
                 else:
-                    if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
-                        post_event_frames = POST_EVENT_SECONDS * CAMERA_CONFIGS[cam_index]["FPS_LIMITER"]
-                    else:
-                        post_event_frames = POST_EVENT_SECONDS * CAMERA_CONFIGS[cam_index]["FPS"]
-
                     # if enaugh frames reached in POST_RECORDING, trigger finalizing video and prepare for next motion detection
-                    if post_motion_frame_count == post_event_frames:
+                    if post_motion_frame_count == POST_EVENT_FRAMES[cam_index]:
                         logger.info(f"[{cam_name}] Post motion frame count reached")
                         frames_copy = frames.copy()
                         threading.Thread(target=write_and_upload_video, args=(cam_index, frame_buffer_copy, frames_copy, video_start_datetime_string)).start()
@@ -325,7 +332,7 @@ def init_cam(cam_index):
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_CONFIGS[cam_index]["FRAME_WIDTH"])
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_CONFIGS[cam_index]["FRAME_HEIGHT"])
     cap.set(cv2.CAP_PROP_FPS, CAMERA_CONFIGS[cam_index]["FPS"])
-    cap_array[cam_index] = cap
+    cap_array[cam_index] = cap    
 
     ret, frame = cap_array[cam_index].read() # fetch first frame to get things going
 
@@ -380,7 +387,17 @@ def init_storage_in_ram():
         shutil.rmtree(VIDEO_PATH_IN_RAM)
     os.makedirs(VIDEO_PATH_IN_RAM, exist_ok=True)
 
+def ensure_storage_in_ram():
+    if not os.path.isdir(VIDEO_PATH_IN_RAM):
+        os.makedirs(VIDEO_PATH_IN_RAM, exist_ok=True)
+        logger.warning("Video directory in RAM not found, creating new ...")
+    else:
+        logger.debug("Video directory in RAM found")
+
 def main():
+    logger.info(f"")
+    logger.info(f"")
+    logger.info(f"[MAIN] Init")
     os.makedirs(VIDEO_PATH, exist_ok=True)
 
     threads = []
