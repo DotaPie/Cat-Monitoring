@@ -133,6 +133,8 @@ def write_and_upload_video(cam_index, frame_buffer_copy, frames_copy, video_star
     timestamp = dt.now().timestamp()
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 
+    ensure_storage_in_ram()
+
     file_name = f"{cam_name}_{video_start_datetime_string}.mp4"
     full_file_path = os.path.join(VIDEO_PATH_IN_RAM, file_name)
 
@@ -150,7 +152,6 @@ def write_and_upload_video(cam_index, frame_buffer_copy, frames_copy, video_star
         out.write(frame)
 
     out.release()
-    time.sleep(0.5) # safety delay for flushing
 
     logger.info(f"[{cam_name}] Video saved as {full_file_path} ({(dt.now().timestamp() - timestamp) * 1000:.3f}ms)")
 
@@ -383,6 +384,13 @@ def init_storage_in_ram():
     if os.path.isdir(VIDEO_PATH_IN_RAM):
         shutil.rmtree(VIDEO_PATH_IN_RAM)
     os.makedirs(VIDEO_PATH_IN_RAM, exist_ok=True)
+
+def ensure_storage_in_ram():
+    if not os.path.isdir(VIDEO_PATH_IN_RAM):
+        os.makedirs(VIDEO_PATH_IN_RAM, exist_ok=True)
+        logger.warning("Video directory in RAM not found, creating new ...")
+    else:
+        logger.debug("Video directory in RAM found")
 
 def main():
     logger.info(f"")
