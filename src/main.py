@@ -423,11 +423,9 @@ def monitor_resources_usages():
     while not stop_event.is_set():
         # monitor process resource usage once every 10 seconds
         process = psutil.Process(os.getpid())
-        cpu_usage_normalized  = process.cpu_percent(interval=2.0) / psutil.cpu_count()
+        cpu_usage_normalized  = process.cpu_percent(interval=10.0) / psutil.cpu_count()
         logger.debug(f"[SYS] CPU usage: {cpu_usage_normalized:.2f} %")
         logger.debug(f"[SYS] RAM usage: {process.memory_info().rss / 1024 / 1024:.2f} MB")
-        
-        time.sleep(8)
 
 def main():
     logger.info(f"")
