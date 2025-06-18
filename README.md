@@ -18,7 +18,7 @@ sudo bash ./install.sh
 ## Hardware requirements
 - RAM: 1GB (recommended)
 - CPU: At least performance of Raspberry PI 4 (recommended) 
-    - it takes about 50% CPU usage on Raspberry PI 4, when using 2x USB 2.0 camera (640x480@10FPS)
+    - it takes about 50% CPU usage on Raspberry PI 4, when using 2x USB 2.0 camera (640x480@10FPS) while idling in detection
 - GPU: not needed
 - Camera: any USB camera/-s
 
