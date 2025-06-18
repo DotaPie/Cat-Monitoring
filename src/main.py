@@ -337,7 +337,8 @@ def cam_loop(cam_index):
 
         try:
             cap_array[cam_index].release() 
-            del cap_array[cam_index]
+            cap_array[cam_index] = None
+            gc.collect()
             logger.info(f"[{cam_name}] Cv2 cap closed")
         except Exception:
             logger.warning(f"[{cam_name}] Cv2 cap failed to close")
@@ -450,6 +451,7 @@ def main():
         upload_executor.shutdown(wait=True)   
         logger.info(f"[{cam_name}] Finished all video writes and uploads")   
 
+        gc.collect()
         sys.exit(0)
 
     for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
