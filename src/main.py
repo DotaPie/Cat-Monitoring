@@ -130,7 +130,7 @@ def ftp_upload_file(full_file_path: str) -> None:
         # transfer the file
         with open(full_file_path, "rb") as src:
             ftp.storbinary(f"STOR {remote_file}", src)
-            logger.info(f"[FTP] Uploaded {remote_file} ({(dt.now().timestamp() - timestamp) * 1000:.3f}ms)")
+            logger.info(f"[FTP] Uploaded {remote_file} ({(dt.now().timestamp() - timestamp):.3f} s)")
 
 def get_datetime_string(shiftSeconds=None):
     if shiftSeconds != None:
@@ -166,7 +166,7 @@ def write_and_upload_video(cam_index, frame_buffer_copy, frames_copy, video_star
 
         out.release()
 
-        logger.info(f"[{cam_name}] Video saved as {full_file_path} ({(dt.now().timestamp() - timestamp) * 1000:.3f}ms)")
+        logger.info(f"[{cam_name}] Video saved as {full_file_path} ({(dt.now().timestamp() - timestamp):.3f} s)")
 
         if FTP_UPLOAD_VIDEO:
             try:
