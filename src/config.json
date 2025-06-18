@@ -11,9 +11,11 @@
     "FTP_USERNAME": "USERNAME",
     "FTP_PASSWORD": "PWD",
     "FTP_PATH": "/Some/Path", 
+    "FTP_TIMEOUT": 10,
 
     "SAVE_VIDEO_LOCALLY": true,
     "VIDEO_PATH": "/opt/CatMonitoring/videos",
+    "MAX_CONCURRENT_VIDEO_WRITES_AND_UPLOADS": 2,
      
     "BUFFER_SECONDS": 5,
     "POST_EVENT_SECONDS": 5,
