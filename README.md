@@ -20,7 +20,7 @@ sudo bash ./install.sh
 - CPU: At least performance of Raspberry PI 4 (recommended) 
     - it takes about 50% CPU usage on Raspberry PI 4, when using 2x USB 2.0 camera (640x480@10FPS) while idling in detection
 - GPU: not needed
-- Camera: any USB camera/-s
+- Camera: any USB camera/-s (probably dont even need to be USB, anything that is accepted by python opencv lib as input parameter)
 
 ## OS requirements: 
 - debian based linux
