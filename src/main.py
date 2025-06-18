@@ -44,6 +44,8 @@ with open(os.path.join(os.path.dirname((os.path.abspath(__file__))), "config.jso
 
 VIDEO_PATH_IN_RAM = "/dev/shm/CatMonitoring/videos"
 
+LOGGING_LEVEL = config["LOGGING_LEVEL"]
+
 FTP_UPLOAD_VIDEO = config["FTP_UPLOAD_VIDEO"]
 FTP_HOSTNAME = config["FTP_HOSTNAME"]
 FTP_USERNAME = config["FTP_USERNAME"]
@@ -181,7 +183,7 @@ def write_and_upload_video(cam_index, frame_buffer_copy, frames_copy, video_star
         logger.debug(f"[{cam_name}] Deleting file {full_file_path} ...")
         os.remove(full_file_path)
     finally:
-        logger.info(f"[{cam_name}] Cleaning up resources in video writer and uploader ...") # TODO: change to debug
+        logger.debug(f"[{cam_name}] Cleaning up resources in video writer and uploader ...") # TODO: change to debug
         del frame_buffer_copy
         del frames_copy
         gc.collect()
@@ -228,11 +230,6 @@ def cam_worker(cam_index):
 
     try:
         while not stop_event.is_set():
-            # Log memory usage of this cam worker every 100 frames
-            if frame_counter % 100 == 0:
-                process = psutil.Process(os.getpid())
-                logger.info(f"[{cam_name}] Memory usage (cam worker): {process.memory_info().rss / 1024 / 1024:.2f} MB") # TODO: change to debug
-
             if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
                 frame_timestamp = dt.now().timestamp()
             ret, frame = cap_array[cam_index].read()
@@ -328,8 +325,8 @@ def cam_loop(cam_index):
     while 1:
         try:
             cam_worker(cam_index) 
-        except Exception:
-            logger.exception(f"[{cam_name}] Camera worker crashed")
+        except Exception as e:
+            logger.exception(f"[{cam_name}] Camera worker crashed ({e})")
 
         if not stop_event.is_set():
             logger.error(f"[{cam_name}] Camera worker stopped")    
@@ -340,8 +337,8 @@ def cam_loop(cam_index):
             cap_array[cam_index] = None
             gc.collect()
             logger.info(f"[{cam_name}] Cv2 cap closed")
-        except Exception:
-            logger.warning(f"[{cam_name}] Cv2 cap failed to close")
+        except Exception as e:
+            logger.warning(f"[{cam_name}] Cv2 cap failed to close ({e})")
 
         if stop_event.is_set():
             return
@@ -422,25 +419,43 @@ def ensure_storage_in_ram():
     else:
         logger.debug("Video directory in RAM found")
 
+def monitor_resources_usages():
+    while not stop_event.is_set():
+        # monitor process resource usage once every 10 seconds
+        process = psutil.Process(os.getpid())
+        cpu_usage_normalized  = process.cpu_percent(interval=2.0) / psutil.cpu_count()
+        logger.debug(f"[SYS] CPU usage: {cpu_usage_normalized:.2f} %")
+        logger.debug(f"[SYS] RAM usage: {process.memory_info().rss / 1024 / 1024:.2f} MB")
+        
+        time.sleep(8)
+
 def main():
     logger.info(f"")
     logger.info(f"")
-    logger.info(f"[MAIN] Init")
+    logger.info(f"[SYS] Init")
     os.makedirs(VIDEO_PATH, exist_ok=True)
 
     threads = []
+
     if STATUS_LED_RPI:
         led_t = None
 
+    if LOGGING_LEVEL == "DEBUG":
+        resource_usage_monitor_t = None
+
     def shutdown(signum, frame):
-        logger.info(f"[MAIN] Signal {signum} received - shutting down")
+        logger.info(f"[SYS] Signal {signum} received - shutting down")
         stop_event.set()                 
 
         if STATUS_LED_RPI:
             led_t.join()
             GPIO.output(STATUS_LED_GPIO_PIN_RPI, GPIO.LOW)
             GPIO.cleanup() 
-            logger.info("[LED] Shutdown of LED completed")       
+            logger.info("[SYS] Shutdown of LED completed")       
+
+        if LOGGING_LEVEL == "DEBUG":
+            resource_usage_monitor_t.join()
+            logger.info("[SYS] Shutdown of RAM monitoring completed")
 
         for cam_index in range(CAM_COUNT):
             cam_name = CAMERA_CONFIGS[cam_index]["NAME"]
@@ -468,18 +483,23 @@ def main():
         t.start()
         threads.append(t)
 
+    if LOGGING_LEVEL == "DEBUG":
+        logger.debug("[SYS] Init RAM monitoring ...")
+        resource_usage_monitor_t = threading.Thread(target=monitor_resources_usages)
+        resource_usage_monitor_t.start()
+
     if STATUS_LED_RPI:
-        logger.info("[LED] Init LED ...")
+        logger.info("[SYS] Init LED ...")
         init_LED()
-        logger.info("[LED] Starting LED handler ...")
+        logger.info("[SYS] Starting LED handler ...")
         led_t = threading.Thread(target=handle_LED)
         led_t.start()
 
     try:
         while 1:
             time.sleep(1)
-    except Exception:
-        logger.exception("[MAIN] Unexpected exception detected")
+    except Exception as e:
+        logger.exception(f"[SYS] Unexpected exception detected ({e})")
         shutdown(signal.SIGTERM, None)
 
 if __name__ == "__main__":
