@@ -16,8 +16,8 @@ sudo bash ./install.sh
 ```
 
 ## Hardware requirements
-- RAM: 1GB (recommended)
-- CPU: At least performance of Raspberry PI 4 (recommended) 
+- RAM: 1GB (when using 2 cams - 640 x 480 @ 10 FPS), but due to bug, at least 2GB is needed right now (working on it)
+- CPU: At least performance of Raspberry PI 4 (when using 2 cams - 640 x 480 @ 10 FPS) 
     - it takes about 50% CPU usage on Raspberry PI 4, when using 2x USB 2.0 camera (640x480@10FPS) while idling in detection
 - GPU: not needed
 - Camera: any USB camera/-s (probably dont even need to be USB, anything that is accepted by python opencv lib as input parameter)
