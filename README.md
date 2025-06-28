@@ -33,7 +33,7 @@ sudo bash ./install.sh
 - any FTP/FTPS running server with default port 21 and default port range for FTPS
     - tested on linux (FTPS), but it should also work on windows
 
-## Verify installation and check logs
+## Verify service is running and check logs
 ```
 sudo systemctl status cat-monitoring
 sudo journalctl -u cat-monitoring.service -n 100 -f 
