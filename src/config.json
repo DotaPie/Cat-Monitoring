@@ -16,6 +16,7 @@
     "SAVE_VIDEO_LOCALLY": true,
     "VIDEO_PATH": "/opt/CatMonitoring/videos",
     "MAX_CONCURRENT_VIDEO_WRITES_AND_UPLOADS": 2,
+    "MAX_VIDEO_LENGTH_SECONDS": 180,
      
     "BUFFER_SECONDS": 5,
     "POST_EVENT_SECONDS": 5,
