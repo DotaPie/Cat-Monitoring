@@ -21,6 +21,9 @@ import signal
 import shutil
 import psutil
 from concurrent.futures import ThreadPoolExecutor
+import glob
+import subprocess
+import re
 
 from hud import draw_hud
 
@@ -242,6 +245,7 @@ def cam_worker(cam_index):
     while not stop_event.is_set():
         if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
             frame_timestamp = dt.now().timestamp()
+
         ret, frame = cap_array[cam_index].read()
         
         if not ret:
@@ -258,7 +262,7 @@ def cam_worker(cam_index):
         logger.debug(f"[{cam_name}] Frame #{frame_counter} -> {motion_pixels} px")
 
         frame = draw_hud(frame, state_string[state_array[cam_index]], dt.now().strftime("%H:%M:%S.%f")[:-3], cam_name, "")
-        frame_buffer.append(frame.copy())
+        frame_buffer.append(frame) # no need for .copy()
 
         # stabilize frame detector first
         if frame_counter > SKIP_FIRST_FRAMES: 
@@ -299,7 +303,7 @@ def cam_worker(cam_index):
                     post_motion_frame_count = 0 # prep for POST_MOTION
                 
             if state_array[cam_index] == State.RECORDING or state_array[cam_index] == State.POST_RECORDING:
-                frames.append(frame.copy())
+                frames.append(frame) # no need for .copy()
 
                 if state_array[cam_index] == State.POST_RECORDING:
                     post_motion_frame_count += 1
@@ -321,7 +325,6 @@ def cam_worker(cam_index):
             frame_duration = dt.now().timestamp() - frame_timestamp
             
             if frame_duration < frame_duration_expected:
-                logger.debug(f"[{cam_name}] Delaying next frame ...")   
                 time.sleep(frame_duration_expected - frame_duration)
             elif frame_duration > frame_duration_expected and frame_counter > SKIP_FIRST_FRAMES:
                 logger.warning(f"[{cam_name}] Frame is taking too long to process")    
@@ -375,9 +378,18 @@ def init_cam(cam_index):
     cam_fps = CAMERA_CONFIGS[cam_index]["FPS"]
     cam_fps_limiter = CAMERA_CONFIGS[cam_index]["FPS_LIMITER"]
     cam_detection_threshold = CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD"]
-    
-    if cam_width != cap_array[cam_index].get(cv2.CAP_PROP_FRAME_WIDTH) or cam_height != cap_array[cam_index].get(cv2.CAP_PROP_FRAME_HEIGHT) or cam_fps != cap_array[cam_index].get(cv2.CAP_PROP_FPS):
-        logger.error(f"[{cam_name}] Mismatch in camera configuration")
+
+    mismatched_params_string = ""
+
+    if cam_width != cap_array[cam_index].get(cv2.CAP_PROP_FRAME_WIDTH):
+        mismatched_params_string += "CAP_PROP_FRAME_WIDTH, "
+    if cam_height != cap_array[cam_index].get(cv2.CAP_PROP_FRAME_HEIGHT):
+        mismatched_params_string += "CAP_PROP_FRAME_HEIGHT, "
+    if cam_fps != cap_array[cam_index].get(cv2.CAP_PROP_FPS):
+        mismatched_params_string += "CAP_PROP_FPS, "
+
+    if mismatched_params_string != "":
+        logger.warning(f"[{cam_name}] Mismatch in camera configuration ({mismatched_params_string[:-2]})")
     else:
         logger.info(f"[{cam_name}] {cam_width} x {cam_height} @ {cam_fps}({cam_fps_limiter}) | {cam_detection_threshold}")
 
@@ -427,6 +439,45 @@ def ensure_storage_in_ram():
     else:
         logger.debug("Video directory in RAM found")
 
+def read_cpu_temperature_c_generic() -> float | None:
+    # 1) psutil (works on Linux, some BSD/macOS; usually empty on Windows)
+    try:
+        temps = psutil.sensors_temperatures(fahrenheit=False)
+        if temps:
+            candidates = []
+            for name, entries in temps.items():
+                for e in entries:
+                    if e.current is None:
+                        continue
+                    label = (e.label or name or "").lower()
+                    score = 0
+                    if any(k in label for k in ("cpu", "core", "package", "soc", "arm")):
+                        score += 2
+                    candidates.append((score, float(e.current)))
+            if candidates:
+                return max(candidates)[1]
+    except Exception:
+        pass
+
+    # 2) Linux sysfs fallback
+    try:
+        vals = []
+        for path in glob.glob("/sys/class/thermal/thermal_zone*/temp"):
+            try:
+                with open(path) as f:
+                    v = f.read().strip()
+                if v:
+                    x = float(v)
+                    vals.append(x / 1000.0 if x > 1000 else x)  # some expose millidegC
+            except Exception:
+                continue
+        if vals:
+            return max(vals)  # pick hottest zone
+    except Exception:
+        pass
+
+    return None
+
 def monitor_resources_usages(sample_sec: float = 10.0):
     proc = psutil.Process(os.getpid())
 
@@ -452,6 +503,7 @@ def monitor_resources_usages(sample_sec: float = 10.0):
         logger.debug("[SYS] CPU")
         logger.debug(f"  |-- process: {proc_cpu_norm:.2f} %")
         logger.debug(f"  |-- system:  {system_cpu:.2f} %")
+        logger.debug(f"  |-- temperature:  {read_cpu_temperature_c_generic()} °C")
 
         logger.debug("[SYS] RAM")
         logger.debug(f"  |-- process: {proc_rss_mb:.2f} MB")
