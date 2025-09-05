@@ -424,8 +424,8 @@ def monitor_resources_usages():
         # monitor process resource usage once every 10 seconds
         process = psutil.Process(os.getpid())
         cpu_usage_normalized  = process.cpu_percent(interval=10.0) / psutil.cpu_count()
-        logger.debug(f"[SYS] CPU usage: {cpu_usage_normalized:.2f} %")
-        logger.debug(f"[SYS] RAM usage: {process.memory_info().rss / 1024 / 1024:.2f} MB")
+        logger.info(f"[SYS] CPU usage: {cpu_usage_normalized:.2f} %")
+        logger.info(f"[SYS] RAM usage: {process.memory_info().rss / 1024 / 1024:.2f} MB")
 
 def main():
     logger.info(f"")
@@ -438,7 +438,7 @@ def main():
     if STATUS_LED_RPI:
         led_t = None
 
-    if LOGGING_LEVEL == "DEBUG":
+    if LOGGING_LEVEL == "INFO":
         resource_usage_monitor_t = None
 
     def shutdown(signum, frame):
@@ -451,7 +451,7 @@ def main():
             GPIO.cleanup() 
             logger.info("[SYS] Shutdown of LED completed")       
 
-        if LOGGING_LEVEL == "DEBUG":
+        if LOGGING_LEVEL == "INFO":
             resource_usage_monitor_t.join()
             logger.info("[SYS] Shutdown of RAM monitoring completed")
 
@@ -481,7 +481,7 @@ def main():
         t.start()
         threads.append(t)
 
-    if LOGGING_LEVEL == "DEBUG":
+    if LOGGING_LEVEL == "INFO":
         logger.debug("[SYS] Init RAM monitoring ...")
         resource_usage_monitor_t = threading.Thread(target=monitor_resources_usages)
         resource_usage_monitor_t.start()
