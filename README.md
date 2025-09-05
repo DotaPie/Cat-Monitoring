@@ -16,11 +16,11 @@ sudo bash ./install.sh
 ```
 
 ## Hardware requirements
-- RAM: 1GB (recommended)
-- CPU: At least performance of Raspberry PI 4 (recommended) 
-    - it takes about 50% CPU usage on Raspberry PI 4, when using 2x USB 2.0 camera (640x480@10FPS)
+- RAM: 1GB (when using 2 cams - 640 x 480 @ 10 FPS)
+- CPU: At least performance of Raspberry PI 4 (when using 2 cams - 640 x 480 @ 10 FPS) 
+    - it takes about 50% CPU usage on Raspberry PI 4, when using 2x USB 2.0 camera (640x480@10FPS) while idling in detection
 - GPU: not needed
-- Camera: any USB camera/-s
+- Camera: any USB camera/-s (probably dont even need to be USB, anything that is accepted by python opencv lib as input parameter)
 
 ## OS requirements: 
 - debian based linux
@@ -33,7 +33,7 @@ sudo bash ./install.sh
 - any FTP/FTPS running server with default port 21 and default port range for FTPS
     - tested on linux (FTPS), but it should also work on windows
 
-## Verify installation and check logs
+## Verify service is running and check logs
 ```
 sudo systemctl status cat-monitoring
 sudo journalctl -u cat-monitoring.service -n 100 -f 
