@@ -3,11 +3,12 @@ from logging_setup import get_logger
 logger = get_logger()
 
 ### IMPORTS ###
+import os
+os.environ["OPENCV_LOG_LEVEL"] = "ERROR"
 import cv2
 import numpy as np
 from collections import deque
 import threading
-import os
 from enum import Enum
 from datetime import datetime as dt
 from datetime import timedelta, date
@@ -109,7 +110,7 @@ def get_YYYYMMDD():
     today = date.today()
     return today.strftime("%Y"), today.strftime("%m"), today.strftime("%d")
 
-def ftp_upload_file(full_file_path: str) -> None:
+def ftp_upload_file(cam_name: str, full_file_path: str) -> None:
     if full_file_path is None:
         raise ValueError("full_file_path must be provided")
     
@@ -130,7 +131,7 @@ def ftp_upload_file(full_file_path: str) -> None:
         # transfer the file
         with open(full_file_path, "rb") as src:
             ftp.storbinary(f"STOR {remote_file}", src)
-            logger.info(f"[FTP] Uploaded {remote_file} ({(dt.now().timestamp() - timestamp):.3f} s)")
+            logger.info(f"[{cam_name}] Uploaded {remote_file} ({(dt.now().timestamp() - timestamp):.3f} s)")
 
 def get_datetime_string(shiftSeconds=None):
     if shiftSeconds != None:
@@ -171,7 +172,7 @@ def write_and_upload_video(cam_index, frame_buffer_copy, frames_copy, video_star
 
         if FTP_UPLOAD_VIDEO:
             try:
-                ftp_upload_file(full_file_path)
+                ftp_upload_file(cam_name, full_file_path)
             except Exception as e:
                 logger.error(f"[{cam_name}] Failed to upload file {full_file_path} ({repr(e)})")
 
@@ -381,7 +382,7 @@ def init_cam(cam_index):
         logger.info(f"[{cam_name}] {cam_width} x {cam_height} @ {cam_fps}({cam_fps_limiter}) | {cam_detection_threshold}")
 
 def init_cams():
-    logger.info(f"[CAM] Found {CAM_COUNT} camera/-s in config")
+    logger.info(f"[SYS] Found {CAM_COUNT} camera/-s in config")
 
     threads = []
     for cam_index in range(CAM_COUNT):
@@ -426,85 +427,126 @@ def ensure_storage_in_ram():
     else:
         logger.debug("Video directory in RAM found")
 
-def monitor_resources_usages():
+def monitor_resources_usages(sample_sec: float = 10.0):
+    proc = psutil.Process(os.getpid())
+
+    # Prime CPU counters so next calls return a delta over the interval
+    proc.cpu_percent(None)
+    psutil.cpu_percent(None)
+
     while not stop_event.is_set():
-        # monitor process resource usage once every 10 seconds
-        process = psutil.Process(os.getpid())
-        cpu_usage_normalized  = process.cpu_percent(interval=10.0) / psutil.cpu_count()
-        logger.info(f"[SYS] CPU usage: {cpu_usage_normalized:.2f} %")
-        logger.info(f"[SYS] RAM usage: {process.memory_info().rss / 1024 / 1024:.2f} MB")
+        # Block for the sample window (system CPU over the same interval)
+        system_cpu = psutil.cpu_percent(interval=sample_sec)             # 0–100 * total cores
+        # Now get the process CPU over that same window
+        proc_cpu_total = proc.cpu_percent(None)                          # may be >100 on multi-core
+        proc_cpu_norm  = proc_cpu_total / psutil.cpu_count(logical=True) # normalize to 0–100 of one core
+
+        # Process memory
+        mem_info = proc.memory_info()
+        proc_rss_mb = mem_info.rss / (1024 * 1024)
+
+        # System memory
+        vm = psutil.virtual_memory()
+        sys_used_mib = vm.used / (1024**2)
+
+        logger.debug("[SYS] CPU")
+        logger.debug(f"  |-- process: {proc_cpu_norm:.2f} %")
+        logger.debug(f"  |-- system:  {system_cpu:.2f} %")
+
+        logger.debug("[SYS] RAM")
+        logger.debug(f"  |-- process: {proc_rss_mb:.2f} MB")
+        logger.debug(f"  |-- system:  {sys_used_mib:.2f} MB")
 
 def main():
-    logger.info(f"")
-    logger.info(f"")
+    logger.info("")
+    logger.info("")
     logger.info(f"[SYS] Init")
     os.makedirs(VIDEO_PATH, exist_ok=True)
 
     threads = []
-
     if STATUS_LED_RPI:
         led_t = None
-
-    if LOGGING_LEVEL == "INFO":
+    if LOGGING_LEVEL == "DEBUG":
         resource_usage_monitor_t = None
 
     def shutdown(signum, frame):
-        logger.info(f"[SYS] Signal {signum} received - shutting down")
-        stop_event.set()                 
-
-        if STATUS_LED_RPI:
-            led_t.join()
-            GPIO.output(STATUS_LED_GPIO_PIN_RPI, GPIO.LOW)
-            GPIO.cleanup() 
-            logger.info("[SYS] Shutdown of LED completed")       
-
-        if LOGGING_LEVEL == "INFO":
-            resource_usage_monitor_t.join()
-            logger.info("[SYS] Shutdown of RAM monitoring completed")
-
-        for cam_index in range(CAM_COUNT):
-            cam_name = CAMERA_CONFIGS[cam_index]["NAME"]
-
-            threads[cam_index].join()
-            logger.info(f"[{cam_name}] Shutdown of camera worker completed")
-
-        upload_executor.shutdown(wait=True)   
-        logger.info(f"[{cam_name}] Finished all video writes and uploads")   
-
-        sys.exit(0)
+        logger.info(f"[SYS] Signal {signum} received ({frame}) - shutting down")
+        stop_event.set()
 
     for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, shutdown)
 
-    init_cams()
-    init_storage_in_ram()
-
-    for cam_index in range(CAM_COUNT):   
-        cam_name = CAMERA_CONFIGS[cam_index]["NAME"]
-
-        logger.info(f"[{cam_name}] Starting motion detection ...")
-        t = threading.Thread(target=cam_loop, args=(cam_index, ))
-        t.start()
-        threads.append(t)
-
-    if LOGGING_LEVEL == "INFO":
-        logger.debug("[SYS] Init RAM monitoring ...")
-        resource_usage_monitor_t = threading.Thread(target=monitor_resources_usages)
-        resource_usage_monitor_t.start()
-
-    if STATUS_LED_RPI:
-        logger.info("[SYS] Init LED ...")
-        init_LED()
-        logger.info("[SYS] Starting LED handler ...")
-        led_t = threading.Thread(target=handle_LED)
-        led_t.start()
-
     try:
-        while 1:
+        init_cams()
+        init_storage_in_ram()
+
+        for cam_index in range(CAM_COUNT):
+            cam_name = CAMERA_CONFIGS[cam_index]["NAME"]
+            logger.info(f"[{cam_name}] Starting motion detection ...")
+            t = threading.Thread(target=cam_loop, args=(cam_index,))
+            t.start()
+            threads.append(t)
+
+        if LOGGING_LEVEL == "DEBUG":
+            resource_usage_monitor_t = threading.Thread(target=monitor_resources_usages)
+            resource_usage_monitor_t.start()
+
+        if STATUS_LED_RPI:
+            logger.info("[SYS] Init LED ...")
+            init_LED()
+            logger.info("[SYS] Starting LED handler ...")
+            led_t = threading.Thread(target=handle_LED)
+            led_t.start()
+
+        # main wait loop; exits when signal handler sets the event
+        while not stop_event.is_set():
             time.sleep(1)
-    except Exception as e:
-        logger.error(f"[SYS] Unexpected exception detected ({repr(e)})")
-        shutdown(signal.SIGTERM, None)
+
+    except Exception:
+        logger.exception(f"[SYS] Unexpected exception detected")
+
+    finally:
+        logger.info("[SYS] Starting thread cleanup ...")
+        # stop LED thread
+        if STATUS_LED_RPI:
+            try:
+                logger.info("[SYS] Joining and cleaning up LED handler ...")
+                led_t.join()
+                GPIO.output(STATUS_LED_GPIO_PIN_RPI, GPIO.LOW)
+                GPIO.cleanup()
+                
+            except Exception as e:
+                logger.warning(f"[SYS] LED cleanup issue ({repr(e)})")
+
+        # stop RAM monitor
+        if LOGGING_LEVEL == "DEBUG":
+            try:
+                logger.info("[SYS] Joining CPU/RAM monitoring ...")
+                resource_usage_monitor_t.join()
+                
+            except Exception as e:
+                logger.warning(f"[SYS] CPU/RAM monitor cleanup issue ({repr(e)})")
+
+        # join cam workers
+        for cam_index, t in enumerate(threads):
+            cam_name = CAMERA_CONFIGS[cam_index]["NAME"]
+            try:
+                logger.info(f"[{cam_name}] Joining camera workerer thread ...")
+                t.join()
+            except Exception as e:
+                logger.warning(f"[{cam_name}] Worker join issue ({repr(e)})")
+
+        # drain writer/upload executor
+        try:
+            logger.info("[SYS] Finishing tasks in thread executor ...")
+            upload_executor.shutdown(wait=True)
+        except Exception as e:
+            logger.warning(f"[SYS] Executor shutdown issue ({repr(e)})")
+
+        logger.info("[SYS] Cleanup completed")
+
+    return 0
 
 if __name__ == "__main__":
-    main()
+    # propagate exit code from main()
+    raise SystemExit(main())
