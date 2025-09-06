@@ -26,6 +26,7 @@ from view import Viewer
 
 ### ENUMS ###
 class State(Enum):
+    NONE = 0
     DETECTING = 1
     RECORDING = 2
     POST_RECORDING = 3
@@ -83,7 +84,7 @@ for cam_index in range(len(CAMERA_CONFIGS)):
 
 ### GLOBALS ###
 cap_array = [None for _ in range(CAM_COUNT)]
-state_array = [State.DETECTING for _ in range(CAM_COUNT)]
+state_array = [State.NONE for _ in range(CAM_COUNT)]
 stop_event = threading.Event()
 upload_executor = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_VIDEO_WRITES_AND_UPLOADS)
 current_frame = [None for _ in range(CAM_COUNT)]
@@ -244,6 +245,7 @@ def cam_worker(cam_index):
     video_start_datetime_string = ""
     frame_counter = 0
     first_movement_detection_timestamp = None
+    state_array[cam_index] = State.DETECTING
 
     if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
         frame_duration_expected = 1.0 / float(CAMERA_CONFIGS[cam_index]["FPS_LIMITER"])
