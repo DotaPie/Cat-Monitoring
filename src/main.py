@@ -16,16 +16,13 @@ import json
 import time
 import ftplib
 from pathlib import Path, PurePosixPath
-import sys
 import signal
 import shutil
 import psutil
 from concurrent.futures import ThreadPoolExecutor
 import glob
-import subprocess
-import re
-
 from hud import draw_hud
+from view import Viewer
 
 ### ENUMS ###
 class State(Enum):
@@ -53,17 +50,17 @@ FTP_USERNAME = config["FTP_USERNAME"]
 FTP_PASSWORD = config["FTP_PASSWORD"]
 FTP_PATH = config["FTP_PATH"]
 FTP_TIMEOUT = config["FTP_TIMEOUT"]
-
 VIDEO_PATH = Path(os.path.expandvars(config["VIDEO_PATH"])).expanduser() # deals with $USER and ~/...
 SAVE_VIDEO_LOCALLY = config["SAVE_VIDEO_LOCALLY"]
 MAX_CONCURRENT_VIDEO_WRITES_AND_UPLOADS = config["MAX_CONCURRENT_VIDEO_WRITES_AND_UPLOADS"]
 MAX_VIDEO_LENGTH_SECONDS = config["MAX_VIDEO_LENGTH_SECONDS"]
-
 BUFFER_SECONDS = config["BUFFER_SECONDS"]
 POST_EVENT_SECONDS = config["POST_EVENT_SECONDS"]
 NUMBER_OF_FRAMES_WITH_MOTION = config["NUMBER_OF_FRAMES_WITH_MOTION"] # recommended min. 3
 NUMBER_OF_FRAMES_WITH_NO_MOTION = config["NUMBER_OF_FRAMES_WITH_NO_MOTION"] # recommended min. 3
 SKIP_FIRST_FRAMES = config["SKIP_FIRST_FRAMES"]
+HTTP_SERVER_ENABLED = config["HTTP_SERVER_ENABLED"]
+HTTP_SERVER_PORT = config["HTTP_SERVER_PORT"]
 
 STATUS_LED_RPI = config["STATUS_LED_RPI"]
 if STATUS_LED_RPI:
@@ -89,6 +86,7 @@ cap_array = [None for _ in range(CAM_COUNT)]
 state_array = [State.DETECTING for _ in range(CAM_COUNT)]
 stop_event = threading.Event()
 upload_executor = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_VIDEO_WRITES_AND_UPLOADS)
+current_frame = [None for _ in range(CAM_COUNT)]
 
 ### FUNCTIONS ###
 def ftp_join_path(*parts) -> str:
@@ -261,8 +259,8 @@ def cam_worker(cam_index):
         motion_pixels = int(np.sum(thresh) / 255)
         logger.debug(f"[{cam_name}] Frame #{frame_counter} -> {motion_pixels} px")
 
-        frame = draw_hud(frame, state_string[state_array[cam_index]], dt.now().strftime("%H:%M:%S.%f")[:-3], cam_name, "")
-        frame_buffer.append(frame) # no need for .copy()
+        current_frame[cam_index] = draw_hud(frame, state_string[state_array[cam_index]], dt.now().strftime("%H:%M:%S.%f")[:-3], cam_name, "")
+        frame_buffer.append(current_frame[cam_index]) # no need for .copy()
 
         # stabilize frame detector first
         if frame_counter > SKIP_FIRST_FRAMES: 
@@ -494,7 +492,7 @@ def monitor_resources_usages(sample_sec: float = 10.0):
 
         # Process memory
         mem_info = proc.memory_info()
-        proc_rss_mb = mem_info.rss / (1024 * 1024)
+        proc_rss_mb = mem_info.rss / (1024**2)
 
         # System memory
         vm = psutil.virtual_memory()
@@ -550,6 +548,19 @@ def main():
             led_t = threading.Thread(target=handle_LED)
             led_t.start()
 
+        if HTTP_SERVER_ENABLED:
+            # Start viewer HTTP server (non-blocking)
+            viewer = Viewer(
+                current_frame=current_frame,
+                cam_count=CAM_COUNT,
+                camera_configs=CAMERA_CONFIGS,
+                stop_event=stop_event,
+                host="0.0.0.0",
+                port=HTTP_SERVER_PORT,
+            )
+            viewer.start()
+            logger.info(f"[SYS] HTTP server started on 0.0.0.0:{HTTP_SERVER_PORT}")
+
         # main wait loop; exits when signal handler sets the event
         while not stop_event.is_set():
             time.sleep(1)
@@ -559,6 +570,11 @@ def main():
 
     finally:
         logger.info("[SYS] Starting thread cleanup ...")
+
+        # stop server
+        if HTTP_SERVER_ENABLED:
+            viewer.stop()
+
         # stop LED thread
         if STATUS_LED_RPI:
             try:
