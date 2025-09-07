@@ -63,6 +63,7 @@ SKIP_FIRST_FRAMES = config["SKIP_FIRST_FRAMES"]
 HTTP_SERVER_ENABLED = config["HTTP_SERVER_ENABLED"]
 HTTP_SERVER_PORT = config["HTTP_SERVER_PORT"]
 SHOW_MOTION_PERCENT_ON_FRAME = config["SHOW_MOTION_PERCENT_ON_FRAME"]
+MOTION_DETECTION_DOWNSCALE = config["MOTION_DETECTION_DOWNSCALE"]
 
 STATUS_LED_RPI = config["STATUS_LED_RPI"]
 if STATUS_LED_RPI:
@@ -264,7 +265,8 @@ def cam_worker(cam_index):
         
         frame_counter += 1
 
-        motion_percent = motion_percent_mog2(background_subtractor, frame, downscale=2.0, thr_bin=200, blur_ksize=3)
+        # thr_bin and blur_ksize are just chatgpt numbers, they work, I dont modify them
+        motion_percent = motion_percent_mog2(background_subtractor, frame, downscale=MOTION_DETECTION_DOWNSCALE, thr_bin=200, blur_ksize=3)
         logger.debug(f"[{cam_name}] [Frame #{frame_counter}] Motion percent -> {motion_percent:.2f}% moving")
 
         current_frame[cam_index] = draw_hud(frame, state_string[state_array[cam_index]], dt.now().strftime("%H:%M:%S.%f")[:-3], cam_name, f"{motion_percent:.2f}" if SHOW_MOTION_PERCENT_ON_FRAME else "")
