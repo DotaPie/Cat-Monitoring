@@ -1,5 +1,5 @@
 # Cat Monitoring
-- Takes stream from any amount of cameras (or any video stream really) and detects motion on them. 
+- Takes stream from any amount of cameras (or any video stream that is accepted by opencv python library) and detects motion on them. 
 - If motion is detected, video (with some pre-buffer and post-buffer) is saved locally or uploaded to FTP server (can do one or another, or both). 
 - Streams can be viewed via web browser (this feature supports only up to 4 streams).
 <p align="center">
@@ -12,7 +12,7 @@ I will be assuming example of 2 cams, each 640 x 480 @ 10 FPS, and running on Ra
 - CPU: process consumes around 15% of the CPU while idling in detection
   - this increases to 30% when previewing the video streams from both cams
 - GPU: not needed
-- Camera: any USB camera/-s (or any video stream really, that is accepted by python opencv library)
+- Camera: any USB camera/-s (or any video stream that is accepted by opencv python library)
 
 ## OS requirements: 
 - debian based linux
