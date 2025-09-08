@@ -18,7 +18,8 @@ I will be assuming example of 2 cams, each 640 x 480 @ 10 FPS, and running on Ra
 - debian based linux
 - installed python3.8 or higher (python3.11 or higher recommended, because of EOL https://devguide.python.org/versions/)
 - installed git
-- mounted /dev/shm with at least 256MB (should be already there on most modern linux distros)
+- mounted /dev/shm with (should be already there on most modern linux distros)
+    - size depends on number of video streams, resolution and FPS, but allocating 256 MB will be most likely enaugh
 - GUI not needed
 
 ## FTP server requirements (optional):
