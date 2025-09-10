@@ -9,6 +9,7 @@
 ## Hardware requirements
 I will be assuming example of 2 cams, each 640 x 480 @ 10 FPS, and running on Raspberry PI 4
 - RAM: process consumes up to 500 MB, but there is still chance of some memory leaking so I recommend at least 1 GB (for now)
+    - this also depends on the configuration of pre-buffer and post-buffer 
 - CPU: process consumes around 15% of the CPU while idling in detection
   - this increases to 30% when previewing the video streams from both cams
 - GPU: not needed
