@@ -55,15 +55,10 @@ VIDEO_PATH = Path(os.path.expandvars(config["VIDEO_PATH"])).expanduser() # deals
 SAVE_VIDEO_LOCALLY = config["SAVE_VIDEO_LOCALLY"]
 MAX_CONCURRENT_VIDEO_WRITES_AND_UPLOADS = config["MAX_CONCURRENT_VIDEO_WRITES_AND_UPLOADS"]
 MAX_VIDEO_LENGTH_SECONDS = config["MAX_VIDEO_LENGTH_SECONDS"]
-BUFFER_SECONDS = config["BUFFER_SECONDS"]
-POST_EVENT_SECONDS = config["POST_EVENT_SECONDS"]
-NUMBER_OF_FRAMES_WITH_MOTION = config["NUMBER_OF_FRAMES_WITH_MOTION"] # recommended min. 3
-NUMBER_OF_FRAMES_WITH_NO_MOTION = config["NUMBER_OF_FRAMES_WITH_NO_MOTION"] # recommended min. 3
 SKIP_FIRST_FRAMES = config["SKIP_FIRST_FRAMES"]
 HTTP_SERVER_ENABLED = config["HTTP_SERVER_ENABLED"]
 HTTP_SERVER_PORT = config["HTTP_SERVER_PORT"]
 SHOW_MOTION_PERCENT_ON_FRAME = config["SHOW_MOTION_PERCENT_ON_FRAME"]
-MOTION_DETECTION_DOWNSCALE = config["MOTION_DETECTION_DOWNSCALE"]
 
 STATUS_LED_RPI = config["STATUS_LED_RPI"]
 if STATUS_LED_RPI:
@@ -80,9 +75,9 @@ CAM_COUNT = len(CAMERA_CONFIGS)
 POST_EVENT_FRAMES = []
 for cam_index in range(len(CAMERA_CONFIGS)):
     if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
-        POST_EVENT_FRAMES.append(POST_EVENT_SECONDS * CAMERA_CONFIGS[cam_index]["FPS_LIMITER"])
+        POST_EVENT_FRAMES.append(CAMERA_CONFIGS[cam_index]["POST_EVENT_SECONDS"] * CAMERA_CONFIGS[cam_index]["FPS_LIMITER"])
     else:
-        POST_EVENT_FRAMES.append(POST_EVENT_SECONDS * CAMERA_CONFIGS[cam_index]["FPS"])
+        POST_EVENT_FRAMES.append(CAMERA_CONFIGS[cam_index]["POST_EVENT_SECONDS"] * CAMERA_CONFIGS[cam_index]["FPS"])
 
 ### GLOBALS ###
 cap_array = [None for _ in range(CAM_COUNT)]
@@ -227,9 +222,9 @@ def cam_worker(cam_index):
     cam_name = CAMERA_CONFIGS[cam_index]["NAME"]
 
     if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
-        buffer_frames = BUFFER_SECONDS * CAMERA_CONFIGS[cam_index]["FPS_LIMITER"]
+        buffer_frames = CAMERA_CONFIGS[cam_index]["BUFFER_SECONDS"] * CAMERA_CONFIGS[cam_index]["FPS_LIMITER"]
     else:
-        buffer_frames = BUFFER_SECONDS * CAMERA_CONFIGS[cam_index]["FPS"]
+        buffer_frames = CAMERA_CONFIGS[cam_index]["BUFFER_SECONDS"] * CAMERA_CONFIGS[cam_index]["FPS"]
 
     frame_buffer = deque(maxlen = buffer_frames)
     frame_buffer_copy = []
@@ -265,9 +260,12 @@ def cam_worker(cam_index):
         
         frame_counter += 1
 
-        # thr_bin and blur_ksize are just chatgpt numbers, they work, I dont modify them
-        motion_percent = motion_percent_mog2(background_subtractor, frame, downscale=MOTION_DETECTION_DOWNSCALE, thr_bin=200, blur_ksize=3)
-        logger.debug(f"[{cam_name}] [Frame #{frame_counter}] Motion percent -> {motion_percent:.2f}% moving")
+        if frame_counter % (CAMERA_CONFIGS[cam_index]["MOTION_DETECTION_FRAME_STEP"]) == 0:
+            # thr_bin and blur_ksize are just chatgpt numbers, they work, I dont modify them
+            motion_percent = motion_percent_mog2(background_subtractor, frame, downscale=CAMERA_CONFIGS[cam_index]["MOTION_DETECTION_DOWNSCALE"], thr_bin=200, blur_ksize=3)
+            logger.debug(f"[{cam_name}] [Frame #{frame_counter}] Motion percent -> {motion_percent:.2f}% moving")
+        else:
+            logger.debug(f"[{cam_name}] [Frame #{frame_counter}] Skipping motion detection")
 
         current_frame[cam_index] = draw_hud(frame, state_string[state_array[cam_index]], dt.now().strftime("%H:%M:%S.%f")[:-3], cam_name, f"{motion_percent:.2f}" if SHOW_MOTION_PERCENT_ON_FRAME else "")
         frame_buffer.append(current_frame[cam_index]) # no need for .copy()
@@ -275,11 +273,11 @@ def cam_worker(cam_index):
         # stabilize frame detector first
         if frame_counter > SKIP_FIRST_FRAMES: 
             # increase or reset motion_frames/no_motion_frames if needed
-            if motion_percent >= CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD_PERCENT"] and previous_motion_percent >= CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD_PERCENT"]:
+            if motion_percent >= CAMERA_CONFIGS[cam_index]["MOTION_DETECTION_THRESHOLD_PERCENT"] and previous_motion_percent >= CAMERA_CONFIGS[cam_index]["MOTION_DETECTION_THRESHOLD_PERCENT"]:
                 motion_frames += 1
                 no_motion_frames = 0 
 
-            elif motion_percent < CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD_PERCENT"] and previous_motion_percent < CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD_PERCENT"]:
+            elif motion_percent < CAMERA_CONFIGS[cam_index]["MOTION_DETECTION_THRESHOLD_PERCENT"] and previous_motion_percent < CAMERA_CONFIGS[cam_index]["MOTION_DETECTION_THRESHOLD_PERCENT"]:
                 no_motion_frames += 1 
                 motion_frames = 0
 
@@ -290,7 +288,7 @@ def cam_worker(cam_index):
             previous_motion_percent = motion_percent
             
             # Movement detected, switching into RECORDING state
-            if state_array[cam_index] == State.DETECTING and motion_frames >= NUMBER_OF_FRAMES_WITH_MOTION - 1:
+            if state_array[cam_index] == State.DETECTING and motion_frames >= CAMERA_CONFIGS[cam_index]["NUMBER_OF_FRAMES_WITH_MOTION"] - 1:
                 logger.info(f"[{cam_name}] Motion detected")
                 no_motion_frames = 0 # prep. for no motion detection
                 state_array[cam_index] = State.RECORDING
@@ -300,7 +298,7 @@ def cam_worker(cam_index):
 
             elif state_array[cam_index] == State.RECORDING:
                 # Movement not detected, switching into POST_RECORDING state
-                if no_motion_frames >= NUMBER_OF_FRAMES_WITH_NO_MOTION - 1:
+                if no_motion_frames >= CAMERA_CONFIGS[cam_index]["NUMBER_OF_FRAMES_WITH_NO_MOTION"] - 1:
                     logger.info(f"[{cam_name}] Motion stopped")
                     state_array[cam_index] = State.POST_RECORDING
                     post_motion_frame_count = 0 # prep for POST_MOTION
@@ -385,7 +383,7 @@ def init_cam(cam_index):
     cam_height = CAMERA_CONFIGS[cam_index]["FRAME_HEIGHT"]
     cam_fps = CAMERA_CONFIGS[cam_index]["FPS"]
     cam_fps_limiter = CAMERA_CONFIGS[cam_index]["FPS_LIMITER"]
-    cam_detection_threshold_percent = CAMERA_CONFIGS[cam_index]["DETECTION_THRESHOLD_PERCENT"]
+    cam_motion_detection_threshold_percent = CAMERA_CONFIGS[cam_index]["MOTION_DETECTION_THRESHOLD_PERCENT"]
 
     mismatched_params_string = ""
 
@@ -399,7 +397,7 @@ def init_cam(cam_index):
     if mismatched_params_string != "":
         logger.warning(f"[{cam_name}] Mismatch in camera configuration ({mismatched_params_string[:-2]})")
     else:
-        logger.info(f"[{cam_name}] {cam_width} x {cam_height} @ {cam_fps}({cam_fps_limiter}) | {cam_detection_threshold_percent}%")
+        logger.info(f"[{cam_name}] {cam_width} x {cam_height} @ {cam_fps}({cam_fps_limiter}) | {cam_motion_detection_threshold_percent}%")
 
 def init_cams():
     logger.info(f"[SYS] Found {CAM_COUNT} camera/-s in config")
