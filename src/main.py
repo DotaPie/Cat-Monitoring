@@ -58,6 +58,7 @@ MAX_VIDEO_LENGTH_SECONDS = config["MAX_VIDEO_LENGTH_SECONDS"]
 SKIP_FIRST_FRAMES = config["SKIP_FIRST_FRAMES"]
 HTTP_SERVER_ENABLED = config["HTTP_SERVER_ENABLED"]
 HTTP_SERVER_PORT = config["HTTP_SERVER_PORT"]
+HTTP_FPS_LIMITER = config["HTTP_FPS_LIMITER"]
 SHOW_MOTION_PERCENT_ON_FRAME = config["SHOW_MOTION_PERCENT_ON_FRAME"]
 
 STATUS_LED_RPI = config["STATUS_LED_RPI"]
@@ -325,6 +326,7 @@ def cam_worker(cam_index):
                         frames.clear()
                         first_movement_detection_timestamp = None
 
+                        detection_stopped_timestamp = dt.now().timestampe()
                         state_array[cam_index] = State.DETECTING
                         
         if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
@@ -565,6 +567,7 @@ def main():
                 stop_event=stop_event,
                 host="0.0.0.0",
                 port=HTTP_SERVER_PORT,
+                http_fps_limit=HTTP_FPS_LIMITER
             )
             viewer.start()
             logger.info(f"[SYS] HTTP server started on 0.0.0.0:{HTTP_SERVER_PORT}")

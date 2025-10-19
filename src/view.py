@@ -46,14 +46,14 @@ INDEX_HTML = """
 """
 
 class Viewer:
-    def __init__(self, current_frame, cam_count, camera_configs, stop_event,
-                 host="0.0.0.0", port=5000):
+    def __init__(self, current_frame, cam_count, camera_configs, stop_event, host="0.0.0.0", port=5000, http_fps_limit=0):
         self.current_frame = current_frame
         self.cam_count = int(cam_count)
         self.camera_configs = camera_configs
         self.stop_event = stop_event
         self.host = host
         self.port = port
+        self.http_fps_limit = int(http_fps_limit)  # 0 = unlimited
 
         self.app = Flask(__name__)
         self._server = None
@@ -62,20 +62,35 @@ class Viewer:
 
     def _mjpeg_gen(self, cam_idx: int):
         boundary = b"--frame"
+        # compute min_dt from limiter; if 0 or <1, treat as unlimited
+        target_fps = self.http_fps_limit if self.http_fps_limit and self.http_fps_limit > 0 else None
+        min_dt = (1.0 / float(target_fps)) if target_fps else 0.0
+        last_sent = 0.0
+
         try:
             while not self.stop_event.is_set():
                 frame = self.current_frame[cam_idx]
                 if frame is None:
-                    time.sleep(0.03)
+                    time.sleep(0.01)
                     continue
+
+                if target_fps:
+                    now = time.time()
+                    dt = now - last_sent
+                    if dt < min_dt:
+                        # sleep just enough to hit the target cadence
+                        time.sleep(max(0.0, min_dt - dt))
+                        continue
+                    last_sent = now
+
                 ok, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
                 if not ok:
                     time.sleep(0.01)
                     continue
+
                 yield (boundary + b"\r\n"
-                       b"Content-Type: image/jpeg\r\n\r\n" +
-                       jpg.tobytes() + b"\r\n")
-                time.sleep(0.01)
+                    b"Content-Type: image/jpeg\r\n\r\n" +
+                    jpg.tobytes() + b"\r\n")
         except (GeneratorExit, BrokenPipeError):
             pass  # client closed
 
