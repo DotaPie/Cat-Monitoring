@@ -61,11 +61,6 @@ HTTP_SERVER_PORT = config["HTTP_SERVER_PORT"]
 HTTP_FPS_LIMITER = config["HTTP_FPS_LIMITER"]
 SHOW_MOTION_PERCENT_ON_FRAME = config["SHOW_MOTION_PERCENT_ON_FRAME"]
 
-STATUS_LED_RPI = config["STATUS_LED_RPI"]
-if STATUS_LED_RPI:
-    import RPi.GPIO as GPIO
-    STATUS_LED_GPIO_PIN_RPI = config["STATUS_LED_GPIO_PIN_RPI"]
-
 CAMERA_CONFIGS = [
     {"NAME": cam_name, **cam_config}
     for cam_name, cam_config in config.items() if cam_name.startswith("CAM")
@@ -326,7 +321,6 @@ def cam_worker(cam_index):
                         frames.clear()
                         first_movement_detection_timestamp = None
 
-                        detection_stopped_timestamp = dt.now().timestampe()
                         state_array[cam_index] = State.DETECTING
                         
         if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
@@ -411,29 +405,7 @@ def init_cams():
         threads.append(t)
 
     for t in threads:
-        t.join()
-
-def init_LED():
-    GPIO.setmode(GPIO.BCM) 
-    GPIO.setup(STATUS_LED_GPIO_PIN_RPI, GPIO.OUT)
-
-def handle_LED():
-    while not stop_event.is_set():
-        motion = False
-
-        for cam_index in range(CAM_COUNT):
-            if state_array[cam_index] == State.RECORDING:
-                motion = True
-                break
-
-        if motion:
-            GPIO.output(STATUS_LED_GPIO_PIN_RPI, GPIO.HIGH) 
-            time.sleep(0.5)
-        else:
-            GPIO.output(STATUS_LED_GPIO_PIN_RPI, GPIO.HIGH) 
-            time.sleep(0.125)
-            GPIO.output(STATUS_LED_GPIO_PIN_RPI, GPIO.LOW) 
-            time.sleep(0.375)       
+        t.join()   
 
 def init_storage_in_ram():
     if os.path.isdir(VIDEO_PATH_IN_RAM):
@@ -524,8 +496,6 @@ def main():
     os.makedirs(VIDEO_PATH, exist_ok=True)
 
     threads = []
-    if STATUS_LED_RPI:
-        led_t = None
     if LOGGING_LEVEL == "DEBUG":
         resource_usage_monitor_t = None
 
@@ -533,7 +503,7 @@ def main():
         logger.info(f"[SYS] Signal {signum} received ({frame}) - shutting down")
         stop_event.set()
 
-    for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+    for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, shutdown)
 
     try:
@@ -550,13 +520,6 @@ def main():
         if LOGGING_LEVEL == "DEBUG":
             resource_usage_monitor_t = threading.Thread(target=monitor_resources_usages)
             resource_usage_monitor_t.start()
-
-        if STATUS_LED_RPI:
-            logger.info("[SYS] Init LED ...")
-            init_LED()
-            logger.info("[SYS] Starting LED handler ...")
-            led_t = threading.Thread(target=handle_LED)
-            led_t.start()
 
         if HTTP_SERVER_ENABLED:
             # Start viewer HTTP server (non-blocking)
@@ -585,17 +548,6 @@ def main():
         # stop server
         if HTTP_SERVER_ENABLED:
             viewer.stop()
-
-        # stop LED thread
-        if STATUS_LED_RPI:
-            try:
-                logger.info("[SYS] Joining and cleaning up LED handler ...")
-                led_t.join()
-                GPIO.output(STATUS_LED_GPIO_PIN_RPI, GPIO.LOW)
-                GPIO.cleanup()
-                
-            except Exception as e:
-                logger.warning(f"[SYS] LED cleanup issue ({repr(e)})")
 
         # stop RAM monitor
         if LOGGING_LEVEL == "DEBUG":

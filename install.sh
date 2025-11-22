@@ -77,14 +77,8 @@ python3 -m venv "${INSTALL_DIR}/venv"
 source "${INSTALL_DIR}/venv/bin/activate"
 pip install --upgrade pip
 
-echo " > Determining which requirements file to use from config.json ..."
-STATUS_LED_RPI=$(jq -r '.STATUS_LED_RPI // false' "$CONFIG_JSON")
-
-if [[ "$STATUS_LED_RPI" == "true" ]]; then
-    REQ_FILE="requirements-rpi.txt"
-else
-    REQ_FILE="requirements.txt"
-fi
+echo " > Checking requirements file ..."
+REQ_FILE="requirements.txt"
 
 REQ_PATH="${SCRIPT_DIR}/${REQ_FILE}"
 if [[ ! -f "$REQ_PATH" ]]; then
