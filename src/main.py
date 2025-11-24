@@ -6,7 +6,6 @@ logger = get_logger()
 import os
 os.environ["OPENCV_LOG_LEVEL"] = "ERROR"
 import cv2
-import numpy as np
 from collections import deque
 import threading
 from enum import Enum
@@ -21,6 +20,7 @@ import shutil
 import psutil
 from concurrent.futures import ThreadPoolExecutor
 import glob
+import math
 from hud import draw_hud
 from view import Viewer
 
@@ -59,7 +59,12 @@ SKIP_FIRST_FRAMES = config["SKIP_FIRST_FRAMES"]
 HTTP_SERVER_ENABLED = config["HTTP_SERVER_ENABLED"]
 HTTP_SERVER_PORT = config["HTTP_SERVER_PORT"]
 HTTP_FPS_LIMITER = config["HTTP_FPS_LIMITER"]
+
 SHOW_MOTION_PERCENT_ON_FRAME = config["SHOW_MOTION_PERCENT_ON_FRAME"]
+SHOW_STATE_ON_FRAME = config["SHOW_STATE_ON_FRAME"]
+SHOW_FPS_ON_FRAME = config["SHOW_FPS_ON_FRAME"]
+SHOW_CAM_NAME_ON_FRAME = config["SHOW_CAM_NAME_ON_FRAME"]
+SHOW_TIMESTAMP_ON_FRAME = config["SHOW_TIMESTAMP_ON_FRAME"]
 
 CAMERA_CONFIGS = [
     {"NAME": cam_name, **cam_config}
@@ -71,15 +76,15 @@ CAM_COUNT = len(CAMERA_CONFIGS)
 POST_EVENT_FRAMES = []
 for cam_index in range(len(CAMERA_CONFIGS)):
     if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
-        POST_EVENT_FRAMES.append(CAMERA_CONFIGS[cam_index]["POST_EVENT_SECONDS"] * CAMERA_CONFIGS[cam_index]["FPS_LIMITER"])
+        POST_EVENT_FRAMES.append(CAMERA_CONFIGS[cam_index]["POST_MOTION_SECONDS"] * CAMERA_CONFIGS[cam_index]["FPS_LIMITER"])
     else:
-        POST_EVENT_FRAMES.append(CAMERA_CONFIGS[cam_index]["POST_EVENT_SECONDS"] * CAMERA_CONFIGS[cam_index]["FPS"])
+        POST_EVENT_FRAMES.append(CAMERA_CONFIGS[cam_index]["POST_MOTION_SECONDS"] * CAMERA_CONFIGS[cam_index]["FPS"])
 
 ### GLOBALS ###
 cap_array = [None for _ in range(CAM_COUNT)]
 state_array = [State.NONE for _ in range(CAM_COUNT)]
 stop_event = threading.Event()
-upload_executor = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_VIDEO_WRITES_AND_UPLOADS)
+video_upload_executor = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_VIDEO_WRITES_AND_UPLOADS)
 current_frame = [None for _ in range(CAM_COUNT)]
 
 ### FUNCTIONS ###
@@ -126,7 +131,8 @@ def ftp_upload_file(cam_name: str, full_file_path: str) -> None:
         # transfer the file
         with open(full_file_path, "rb") as src:
             ftp.storbinary(f"STOR {remote_file}", src)
-            logger.info(f"[{cam_name}] Uploaded {remote_file} ({(dt.now().timestamp() - timestamp):.3f} s)")
+            duration_ms = (dt.now().timestamp() - timestamp) * 1000
+            logger.info(f"[{cam_name}] Uploaded {remote_file} ({duration_ms:.3f} ms)")
 
 def get_datetime_string(shiftSeconds=None):
     if shiftSeconds != None:
@@ -134,17 +140,19 @@ def get_datetime_string(shiftSeconds=None):
     
     return dt.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
 
-def write_and_upload_video(cam_index, frame_buffer_copy, frames_copy, video_start_datetime_string):
+def post_process_video(cam_index, pre_buffer_frames, motion_video_path, motion_start_datetime_string):
+    """Combine pre-buffer frames with already-written motion video to create final video"""
     try:
         cam_name = CAMERA_CONFIGS[cam_index]["NAME"]
-
-        logger.info(f"[{cam_name}] Saving video ...")
+        
+        logger.info(f"[{cam_name}] Combining pre-buffer with motion video ...")
         timestamp = dt.now().timestamp()
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 
-        ensure_storage_in_ram()
+        ensure_ram_dirs()
 
-        file_name = f"{cam_name}_{video_start_datetime_string}.mp4"
+        # Create final combined video file
+        file_name = f"{cam_name}_{motion_start_datetime_string}.mp4"
         full_file_path = os.path.join(VIDEO_PATH_IN_RAM, file_name)
 
         if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
@@ -154,48 +162,81 @@ def write_and_upload_video(cam_index, frame_buffer_copy, frames_copy, video_star
         
         out = cv2.VideoWriter(full_file_path, fourcc, video_fps, (CAMERA_CONFIGS[cam_index]["FRAME_WIDTH"], CAMERA_CONFIGS[cam_index]["FRAME_HEIGHT"]))
 
-        for frame in frame_buffer_copy:
+        # Write pre-buffer frames first
+        for frame in pre_buffer_frames:
             out.write(frame)
 
-        for frame in frames_copy:
-            out.write(frame)
+        # Read back and copy frames from the motion video
+        if os.path.exists(motion_video_path):
+            motion_cap = cv2.VideoCapture(motion_video_path)
+            while True:
+                ret, frame = motion_cap.read()
+                if not ret:
+                    break
+                out.write(frame)
+            motion_cap.release()
+            
+            # Clean up temporary motion video
+            try:
+                os.remove(motion_video_path)
+                logger.debug(f"[{cam_name}] Removed temporary motion video: {motion_video_path}")
+            except Exception as e:
+                logger.warning(f"[{cam_name}] Failed to remove temporary motion video: {repr(e)}")
+        else:
+            logger.warning(f"[{cam_name}] Motion video file not found: {motion_video_path}")
 
         out.release()
         out = None
 
-        logger.info(f"[{cam_name}] Video saved as {full_file_path} ({(dt.now().timestamp() - timestamp):.3f} s)")
+        duration_ms = (dt.now().timestamp() - timestamp) * 1000
+        logger.info(f"[{cam_name}] Combined video saved as {full_file_path} ({duration_ms:.3f} ms)")
 
-        if FTP_UPLOAD_VIDEO:
-            try:
-                ftp_upload_file(cam_name, full_file_path)
-            except Exception as e:
-                logger.error(f"[{cam_name}] Failed to upload file {full_file_path} ({repr(e)})")
+        """Handle FTP upload and local storage after video is complete"""
+        try:
+            if FTP_UPLOAD_VIDEO:
+                try:
+                    ftp_upload_file(cam_name, full_file_path)
+                except Exception as e:
+                    logger.error(f"[{cam_name}] Failed to upload file {full_file_path} ({repr(e)})")
 
-        if SAVE_VIDEO_LOCALLY:
-            try:
-                logger.info(f"[{cam_name}] Copying file {full_file_path} into {VIDEO_PATH} ...")
-                shutil.copy2(full_file_path, os.path.join(VIDEO_PATH, file_name))
-            except Exception as e:
-                logger.error(f"[{cam_name}] Failed to save file locally {full_file_path} ({repr(e)})")
+            if SAVE_VIDEO_LOCALLY:
+                try:
+                    logger.info(f"[{cam_name}] Copying file {full_file_path} into {VIDEO_PATH} ...")
+                    shutil.copy2(full_file_path, os.path.join(VIDEO_PATH, os.path.basename(full_file_path)))
+                except Exception as e:
+                    logger.error(f"[{cam_name}] Failed to save file locally {full_file_path} ({repr(e)})")
+            
+            logger.debug(f"[{cam_name}] Deleting file {full_file_path} ...")
+            os.remove(full_file_path)
+            
+        except Exception as e:
+            logger.error(f"[{cam_name}] Failed to process file {full_file_path} ({repr(e)})")
+            if full_file_path and os.path.exists(full_file_path):
+                try:
+                    os.remove(full_file_path)
+                except:
+                    pass
         
-        logger.debug(f"[{cam_name}] Deleting file {full_file_path} ...")
-        os.remove(full_file_path)
-
     except Exception as e:
-        logger.error(f"[{cam_name}] Failed to process file {full_file_path} ({repr(e)})")
+        logger.error(f"[{cam_name}] Failed to process combined video {full_file_path} ({repr(e)})")
         
-        if full_file_path and os.path.exists(full_file_path):
-            try:
-                os.remove(full_file_path)
-            except:
-                pass
+        # Clean up files on error
+        for path in [full_file_path, motion_video_path]:
+            if path and os.path.exists(path):
+                try:
+                    os.remove(path)
+                except:
+                    pass
             
     finally:
-        logger.debug(f"[{cam_name}] Cleaning up resources in video writer and uploader ...")
-        if out != None:
-            out.release()
+        logger.debug(f"[{cam_name}] Cleaning up resources in video combiner ...")
+        if 'out' in locals() and out is not None:
+            try:
+                out.release()
+            except:
+                pass
 
-def motion_percent_mog2(mog2, frame, downscale=2.0, thr_bin=200, blur_ksize=3):
+def motion_percent_mog2(mog2, frame, downscale, thr_bin=200, blur_ksize=3):
     """
     Returns percentage of moving pixels (0..100) on a downscaled grayscale view.
     """
@@ -218,13 +259,14 @@ def cam_worker(cam_index):
     cam_name = CAMERA_CONFIGS[cam_index]["NAME"]
 
     if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
-        buffer_frames = CAMERA_CONFIGS[cam_index]["BUFFER_SECONDS"] * CAMERA_CONFIGS[cam_index]["FPS_LIMITER"]
+        buffer_frames = CAMERA_CONFIGS[cam_index]["PRE_MOTION_SECONDS"] * CAMERA_CONFIGS[cam_index]["FPS_LIMITER"]
     else:
-        buffer_frames = CAMERA_CONFIGS[cam_index]["BUFFER_SECONDS"] * CAMERA_CONFIGS[cam_index]["FPS"]
+        buffer_frames = CAMERA_CONFIGS[cam_index]["PRE_MOTION_SECONDS"] * CAMERA_CONFIGS[cam_index]["FPS"]
 
     frame_buffer = deque(maxlen = buffer_frames)
-    frame_buffer_copy = []
-    frames = []
+    pre_buffer_frames = []  # Store pre-buffer frames when motion starts
+    video_writer = None  # Active VideoWriter during recording
+    temp_video_path = None  # Path to temporary video file
     background_subtractor = cv2.createBackgroundSubtractorMOG2(
         history=80, 
         varThreshold=32, 
@@ -235,10 +277,15 @@ def cam_worker(cam_index):
     previous_motion_percent = 0
     motion_frames = 0
     no_motion_frames = 0
-    video_start_datetime_string = ""
+    motion_start_datetime_string = ""
     frame_counter = 0
     first_movement_detection_timestamp = None
     state_array[cam_index] = State.DETECTING
+    
+    # FPS counter variables
+    fps_counter = 0
+    fps_frame_count = 0
+    fps_last_second = int(dt.now().timestamp())
 
     if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
         frame_duration_expected = 1.0 / float(CAMERA_CONFIGS[cam_index]["FPS_LIMITER"])
@@ -248,26 +295,63 @@ def cam_worker(cam_index):
         if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
             frame_timestamp = dt.now().timestamp()
 
+        # Measure frame capture time
+        capture_start = dt.now().timestamp()
         ret, frame = cap_array[cam_index].read()
+        capture_duration = (dt.now().timestamp() - capture_start) * 1000
         
         if not ret:
             logger.error(f"[{cam_name}] Empty frame")
             return
         
         frame_counter += 1
+        logger.debug(f"[{cam_name}] [Frame #{frame_counter}] Frame capture ({capture_duration:.3f} ms)")
 
-        if frame_counter % (CAMERA_CONFIGS[cam_index]["MOTION_DETECTION_FRAME_STEP"]) == 0:
+        # Calculate FPS once per second by counting frames
+        current_second = int(dt.now().timestamp())
+        fps_frame_count += 1
+        if current_second != fps_last_second:
+            fps_counter = fps_frame_count - 1  # Don't count the frame that triggered the second change
+            fps_frame_count = 1  # Start new second with current frame
+            fps_last_second = current_second
+
+        # Optimize frame processing - only do motion detection on specified frames
+        motion_detection_frame = frame_counter % (CAMERA_CONFIGS[cam_index]["MOTION_DETECTION_FRAME_STEP"]) == 0
+        
+        if motion_detection_frame:
+            # Measure motion detection time
+            motion_start = dt.now().timestamp()
             # thr_bin and blur_ksize are just chatgpt numbers, they work, I dont modify them
-            motion_percent = motion_percent_mog2(background_subtractor, frame, downscale=CAMERA_CONFIGS[cam_index]["MOTION_DETECTION_DOWNSCALE"], thr_bin=200, blur_ksize=3)
-            logger.debug(f"[{cam_name}] [Frame #{frame_counter}] Motion percent -> {motion_percent:.2f}% moving")
+            motion_percent = motion_percent_mog2(background_subtractor, frame, downscale=CAMERA_CONFIGS[cam_index]["MOTION_DETECTION_DOWNSCALE"])
+            motion_duration = (dt.now().timestamp() - motion_start) * 1000
+            logger.debug(f"[{cam_name}] [Frame #{frame_counter}] Motion detection ({motion_duration:.3f} ms) -> {motion_percent:.2f}% moving")
         else:
             logger.debug(f"[{cam_name}] [Frame #{frame_counter}] Skipping motion detection")
 
-        current_frame[cam_index] = draw_hud(frame, state_string[state_array[cam_index]], dt.now().strftime("%H:%M:%S.%f")[:-3], cam_name, f"{motion_percent:.2f}" if SHOW_MOTION_PERCENT_ON_FRAME else "")
+        # draw HUD
+        hud_start = dt.now().timestamp()
+        current_frame[cam_index] = draw_hud(
+            frame, 
+            f"{state_string[state_array[cam_index]]}" if SHOW_STATE_ON_FRAME else "", 
+            dt.now().strftime("%H:%M:%S.%f")[:-3] if SHOW_TIMESTAMP_ON_FRAME else "", 
+            cam_name if SHOW_CAM_NAME_ON_FRAME else "", 
+            f"{fps_counter}" if SHOW_FPS_ON_FRAME else "",
+            f"{motion_percent:.2f}%" if SHOW_MOTION_PERCENT_ON_FRAME else "",
+            ""
+        )
+        hud_duration = (dt.now().timestamp() - hud_start) * 1000
+        
+        buffer_start = dt.now().timestamp()
         frame_buffer.append(current_frame[cam_index]) # no need for .copy()
+        buffer_duration = (dt.now().timestamp() - buffer_start) * 1000
+        
+        logger.debug(f"[{cam_name}] [Frame #{frame_counter}] HUD draw ({hud_duration:.3f} ms), Buffer append ({buffer_duration:.3f} ms)")
 
         # stabilize frame detector first
         if frame_counter > SKIP_FIRST_FRAMES: 
+            # Measure motion logic processing time
+            logic_start = dt.now().timestamp()
+            
             # increase or reset motion_frames/no_motion_frames if needed
             if motion_percent >= CAMERA_CONFIGS[cam_index]["MOTION_DETECTION_THRESHOLD_PERCENT"] and previous_motion_percent >= CAMERA_CONFIGS[cam_index]["MOTION_DETECTION_THRESHOLD_PERCENT"]:
                 motion_frames += 1
@@ -276,6 +360,9 @@ def cam_worker(cam_index):
             elif motion_percent < CAMERA_CONFIGS[cam_index]["MOTION_DETECTION_THRESHOLD_PERCENT"] and previous_motion_percent < CAMERA_CONFIGS[cam_index]["MOTION_DETECTION_THRESHOLD_PERCENT"]:
                 no_motion_frames += 1 
                 motion_frames = 0
+                
+            logic_duration = (dt.now().timestamp() - logic_start) * 1000
+            logger.debug(f"[{cam_name}] [Frame #{frame_counter}] Motion logic processing ({logic_duration:.3f} ms)")
 
             logger.debug(f"[{cam_name}] [Frame #{frame_counter}] Motion frames -> {motion_frames}") 
             logger.debug(f"[{cam_name}] [Frame #{frame_counter}] No motion frames -> {no_motion_frames}") 
@@ -288,8 +375,37 @@ def cam_worker(cam_index):
                 logger.info(f"[{cam_name}] Motion detected")
                 no_motion_frames = 0 # prep. for no motion detection
                 state_array[cam_index] = State.RECORDING
-                video_start_datetime_string = get_datetime_string()
-                frame_buffer_copy = list(frame_buffer) # convert deque into list (and copy), <1ms event
+                motion_start_datetime_string = get_datetime_string()
+                
+                # Quick copy of pre-buffer frames (couple ms operation)
+                pre_buffer_frames = list(frame_buffer)  # convert deque into list (and copy), <1ms event
+                
+                # Start VideoWriter immediately for streaming recording
+                try:
+                    writer_start_timestamp = dt.now().timestamp()
+                    ensure_ram_dirs()
+                    file_name = f"{cam_name}_{motion_start_datetime_string}_temp.mp4"
+                    temp_video_path = os.path.join(VIDEO_PATH_IN_RAM, file_name)
+                    
+                    if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
+                        video_fps = CAMERA_CONFIGS[cam_index]["FPS_LIMITER"]
+                    else:
+                        video_fps = CAMERA_CONFIGS[cam_index]["FPS"]
+                    
+                    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+                    video_writer = cv2.VideoWriter(
+                        temp_video_path, 
+                        fourcc, 
+                        video_fps, 
+                        (CAMERA_CONFIGS[cam_index]["FRAME_WIDTH"], CAMERA_CONFIGS[cam_index]["FRAME_HEIGHT"])
+                    )
+                    writer_duration_ms = (dt.now().timestamp() - writer_start_timestamp) * 1000
+                    logger.info(f"[{cam_name}] Started streaming video writer: {temp_video_path} ({writer_duration_ms:.3f} ms)")
+                except Exception as e:
+                    logger.error(f"[{cam_name}] Failed to start video writer: {repr(e)}")
+                    video_writer = None
+                    temp_video_path = None
+                
                 first_movement_detection_timestamp = dt.now().timestamp()
 
             elif state_array[cam_index] == State.RECORDING:
@@ -300,12 +416,20 @@ def cam_worker(cam_index):
                     post_motion_frame_count = 0 # prep for POST_MOTION
                 # Split video if movement is taking too long (to prevent excessive RAM consumption)
                 elif dt.now().timestamp() - first_movement_detection_timestamp > MAX_VIDEO_LENGTH_SECONDS:
-                    logger.warning(f"[{cam_name}] Max video length reached ({MAX_VIDEO_LENGTH_SECONDS}s). If the motion persists, it will simply create new video with motion.")
+                    logger.warning(f"[{cam_name}] Max video length reached ({MAX_VIDEO_LENGTH_SECONDS} s). If the motion persists, it will simply create new video with motion.")
                     state_array[cam_index] = State.POST_RECORDING
                     post_motion_frame_count = 0 # prep for POST_MOTION
                 
+            # Write frames directly to video during RECORDING and POST_RECORDING
             if state_array[cam_index] == State.RECORDING or state_array[cam_index] == State.POST_RECORDING:
-                frames.append(frame) # no need for .copy()
+                if video_writer is not None:
+                    try:
+                        frame_write_start = dt.now().timestamp()
+                        video_writer.write(current_frame[cam_index])
+                        frame_write_duration_ms = (dt.now().timestamp() - frame_write_start) * 1000
+                        logger.debug(f"[{cam_name}] [Frame #{frame_counter}] Frame write {frame_write_duration_ms:.3f} ms")
+                    except Exception as e:
+                        logger.error(f"[{cam_name}] [Frame #{frame_counter}] Failed to write frame to video: {repr(e)}")
 
                 if state_array[cam_index] == State.POST_RECORDING:
                     post_motion_frame_count += 1
@@ -313,25 +437,49 @@ def cam_worker(cam_index):
                     if post_motion_frame_count == POST_EVENT_FRAMES[cam_index]:
                         logger.info(f"[{cam_name}] Post motion frame count reached")
 
-                        upload_executor.submit(write_and_upload_video, cam_index, frame_buffer_copy, frames.copy(), video_start_datetime_string)
+                        # Close the video writer and process the video
+                        if video_writer is not None:
+                            try:
+                                writer_close_start = dt.now().timestamp()
+                                video_writer.release()
+                                video_writer = None
+                                close_duration_ms = (dt.now().timestamp() - writer_close_start) * 1000
+                                logger.info(f"[{cam_name}] Video writer closed ({close_duration_ms:.3f} ms)")
+                            except Exception as e:
+                                logger.error(f"[{cam_name}] Failed to close video writer: {repr(e)}")
+
+                        # Submit for post-processing (merge with pre-buffer)
+                        if temp_video_path:
+                            video_upload_executor.submit(post_process_video, cam_index, pre_buffer_frames.copy(), temp_video_path, motion_start_datetime_string)
                         
+                        # Reset state
                         previous_motion_percent = 0
                         motion_frames = 0
                         no_motion_frames = 0
-                        frames.clear()
+                        pre_buffer_frames.clear()
                         first_movement_detection_timestamp = None
+                        temp_video_path = None
 
                         state_array[cam_index] = State.DETECTING
                         
+        # Measure FPS limiting and overall loop performance
         if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
             frame_duration = dt.now().timestamp() - frame_timestamp
             
             if frame_duration < frame_duration_expected:
-                time.sleep(frame_duration_expected - frame_duration)
+                sleep_time = frame_duration_expected - frame_duration
+                logger.debug(f"[{cam_name}] [Frame #{frame_counter}] Applying FPS limiter (sleeping {sleep_time*1000:.3f} ms)")
+                time.sleep(sleep_time)
             elif frame_duration > frame_duration_expected and frame_counter > SKIP_FIRST_FRAMES:
-                logger.warning(f"[{cam_name}] Frame is taking too long to process")    
-            else:
-                pass
+                logger.warning(f"[{cam_name}] [Frame #{frame_counter}] Frame is taking too long to process")    
+        
+    # Cleanup: Close video writer if still open
+    if video_writer is not None:
+        try:
+            video_writer.release()
+            logger.info(f"[{cam_name}] Video writer closed on exit")
+        except Exception as e:
+            logger.error(f"[{cam_name}] Failed to close video writer on exit: {repr(e)}")
 
 def cam_loop(cam_index):
     cam_name = CAMERA_CONFIGS[cam_index]["NAME"]
@@ -370,10 +518,27 @@ def init_cam(cam_index):
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_CONFIGS[cam_index]["FRAME_WIDTH"])
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_CONFIGS[cam_index]["FRAME_HEIGHT"])
     cap.set(cv2.CAP_PROP_FPS, CAMERA_CONFIGS[cam_index]["FPS"])
+    
+    # Try camera optimizations with detailed reporting
+    logger.debug(f"[{cam_name}] Adjusting buffer size ...")
+    
+    # Important to increase buffer size, with buffer only 1, it wont go much above 10 FPS
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1) 
+    for buf_size in [1, 2, 3]:
+        try:
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, buf_size)
+            actual_buf = int(cap.get(cv2.CAP_PROP_BUFFERSIZE))
+            logger.debug(f"[{cam_name}] Buffer size change (target: {buf_size} -> actual: {actual_buf})")
+
+            if actual_buf != buf_size:
+                break
+        except:
+            logger.debug(f"[{cam_name}] Buffer size change (target: {buf_size} -> actual: FAILED)")
+        
     cap_array[cam_index] = cap    
 
     ret, frame = cap_array[cam_index].read() # fetch first frame to get things going
-
+    
     # verify cam params
     cam_width = CAMERA_CONFIGS[cam_index]["FRAME_WIDTH"]
     cam_height = CAMERA_CONFIGS[cam_index]["FRAME_HEIGHT"]
@@ -381,19 +546,34 @@ def init_cam(cam_index):
     cam_fps_limiter = CAMERA_CONFIGS[cam_index]["FPS_LIMITER"]
     cam_motion_detection_threshold_percent = CAMERA_CONFIGS[cam_index]["MOTION_DETECTION_THRESHOLD_PERCENT"]
 
+    # Get actual camera properties for detailed analysis
+    actual_width = int(cap_array[cam_index].get(cv2.CAP_PROP_FRAME_WIDTH))
+    actual_height = int(cap_array[cam_index].get(cv2.CAP_PROP_FRAME_HEIGHT))
+    actual_fps = int(cap_array[cam_index].get(cv2.CAP_PROP_FPS))
+    actual_buffer_size = int(cap_array[cam_index].get(cv2.CAP_PROP_BUFFERSIZE))
+    actual_fourcc = cap_array[cam_index].get(cv2.CAP_PROP_FOURCC)
+    
+    # Convert fourcc back to readable format
+    fourcc_str = "".join([chr((int(actual_fourcc) >> 8 * i) & 0xFF) for i in range(4)])
+    
     mismatched_params_string = ""
-
-    if cam_width != cap_array[cam_index].get(cv2.CAP_PROP_FRAME_WIDTH):
-        mismatched_params_string += "CAP_PROP_FRAME_WIDTH, "
-    if cam_height != cap_array[cam_index].get(cv2.CAP_PROP_FRAME_HEIGHT):
-        mismatched_params_string += "CAP_PROP_FRAME_HEIGHT, "
-    if cam_fps != cap_array[cam_index].get(cv2.CAP_PROP_FPS):
-        mismatched_params_string += "CAP_PROP_FPS, "
+    if cam_width != actual_width:
+        mismatched_params_string += f"WIDTH(target:{cam_width} -> actual:{actual_width}), "
+    if cam_height != actual_height:
+        mismatched_params_string += f"HEIGHT(target:{cam_height} -> actual:{actual_height}), "
+    if cam_fps != actual_fps:
+        mismatched_params_string += f"FPS(target:{cam_fps} -> actual:{actual_fps}), "
 
     if mismatched_params_string != "":
-        logger.warning(f"[{cam_name}] Mismatch in camera configuration ({mismatched_params_string[:-2]})")
-    else:
-        logger.info(f"[{cam_name}] {cam_width} x {cam_height} @ {cam_fps}({cam_fps_limiter}) | {cam_motion_detection_threshold_percent}%")
+        logger.warning(f"[{cam_name}] Parameter mismatches: {mismatched_params_string[:-2]}")
+    
+    logger.info(f"[{cam_name}] Settings")
+    logger.info(f"[{cam_name}]   |-- Resolution: {actual_width}x{actual_height}")
+    logger.info(f"[{cam_name}]   |-- Hardware FPS: {cam_fps}")
+    logger.info(f"[{cam_name}]   |-- Software FPS limit: {cam_fps_limiter}")
+    logger.info(f"[{cam_name}]   |-- Motion detection threshold %: {cam_motion_detection_threshold_percent}")
+    logger.info(f"[{cam_name}]   |-- Format: {fourcc_str}")
+    logger.info(f"[{cam_name}]   |-- Buffer: {actual_buffer_size}")
 
 def init_cams():
     logger.info(f"[SYS] Found {CAM_COUNT} camera/-s in config")
@@ -412,7 +592,7 @@ def init_storage_in_ram():
         shutil.rmtree(VIDEO_PATH_IN_RAM)
     os.makedirs(VIDEO_PATH_IN_RAM, exist_ok=True)
 
-def ensure_storage_in_ram():
+def ensure_ram_dirs():
     if not os.path.isdir(VIDEO_PATH_IN_RAM):
         os.makedirs(VIDEO_PATH_IN_RAM, exist_ok=True)
         logger.warning("Video directory in RAM not found, creating new ...")
@@ -570,7 +750,7 @@ def main():
         # drain writer/upload executor
         try:
             logger.info("[SYS] Finishing tasks in thread executor ...")
-            upload_executor.shutdown(wait=True)
+            video_upload_executor.shutdown(wait=True)
         except Exception as e:
             logger.warning(f"[SYS] Executor shutdown issue ({repr(e)})")
 

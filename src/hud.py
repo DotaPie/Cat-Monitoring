@@ -5,21 +5,24 @@ def draw_hud(   frame,
                 br: str,          # bottom-right (required)
                 tl: str = "",     # top-left
                 tr: str = "",     # top-right
+                tc: str = "",     # top-center
+                bc: str = "",     # bottom-center
                 height_ratio:   float = 0.05,
-                max_width_ratio: float = 0.45,
                 margin_ratio:    float = 0.02,
                 font = cv2.FONT_HERSHEY_SIMPLEX,
                 color_fg = (255, 255, 255),   # white
-                color_bg = (0, 0, 0),         # black
-                thickness: int = 2,
-                bg_extra: int = 4):            # outline
+                color_bg = (0, 0, 0)):         # black
 
     h, w = frame.shape[:2]
     margin = int(h * margin_ratio)
+    
+    # Scale thickness and background outline with resolution
+    scaled_thickness = max(2, int(h * 0.005))  # Moderate thickness (about 4px at 720p, 5px at 1080p, 7px at 1440p)
+    scaled_bg_extra = max(3, int(h * 0.008))   # Moderate outline (about 6px at 720p, 9px at 1080p, 11px at 1440p)
 
     # helper (width, height, baseline) at a given scale
     def _metrics(text, scale):
-        (tw, th), base = cv2.getTextSize(text, font, scale, thickness)
+        (tw, th), base = cv2.getTextSize(text, font, scale, scaled_thickness)
         return tw, th, base
 
     # helper: draw outlined text
@@ -27,45 +30,26 @@ def draw_hud(   frame,
         if not text:
             return
         cv2.putText(frame, text, (x, y), font,
-                    scale, color_bg, thickness + bg_extra, cv2.LINE_AA)
+                    scale, color_bg, scaled_thickness + scaled_bg_extra, cv2.LINE_AA)
         cv2.putText(frame, text, (x, y), font,
-                    scale, color_fg, thickness, cv2.LINE_AA)
+                    scale, color_fg, scaled_thickness, cv2.LINE_AA)
 
-    # 1 base scale from desired glyph height
-    ((_, glyph_h), _) = cv2.getTextSize("Hg", font, 1, thickness)
-    base_scale = (h * height_ratio) / glyph_h
-
-    # 2 collect metrics for every non-empty label
-    labels = {"TL": tl, "TR": tr, "BL": bl, "BR": br}
+    # Simple fixed scale for all text
+    ((_, glyph_h), _) = cv2.getTextSize("Hg", font, 1, scaled_thickness)
+    fixed_scale = (h * height_ratio) / glyph_h
+    
+    # Simple data collection - same scale for everything
+    labels = {"TL": tl, "TR": tr, "BL": bl, "BR": br, "TC": tc, "BC": bc}
     data = {}
+    
     for key, txt in labels.items():
-        s = base_scale
-        tw, th, base = _metrics(txt, s)
+        if txt:
+            tw, th, base = _metrics(txt, fixed_scale)
+            data[key] = dict(scale=fixed_scale, width=tw, height=th, base=base)
+        else:
+            data[key] = dict(scale=fixed_scale, width=0, height=0, base=0)
 
-        # width cap only applies to opposite-side pairs
-        if key in ("TL", "TR", "BL", "BR") and tw > w * max_width_ratio:
-            s *= (w * max_width_ratio) / tw
-            tw, th, base = _metrics(txt, s)
-
-        data[key] = dict(scale=s, width=tw, height=th, base=base)
-
-    # 3 shrink top pair together if they'd collide
-    total_top_w = data["TL"]["width"] + data["TR"]["width"] + 3 * margin
-    if total_top_w > w:
-        factor = (w - 3 * margin) / (data["TL"]["width"] + data["TR"]["width"])
-        for key in ("TL", "TR"):
-            s = data[key]["scale"] * factor
-            tw, th, base = _metrics(labels[key], s)
-            data[key].update(scale=s, width=tw, height=th, base=base)
-
-    # 4 shrink bottom pair together if they'd collide
-    total_bot_w = data["BL"]["width"] + data["BR"]["width"] + 3 * margin
-    if total_bot_w > w:
-        factor = (w - 3 * margin) / (data["BL"]["width"] + data["BR"]["width"])
-        for key in ("BL", "BR"):
-            s = data[key]["scale"] * factor
-            tw, th, base = _metrics(labels[key], s)
-            data[key].update(scale=s, width=tw, height=th, base=base)
+    # No collision detection - just use fixed scale
 
     # 5 render
     # top-left: y = margin + text-height  (keeps glyph top == margin)
@@ -91,5 +75,17 @@ def draw_hud(   frame,
           w - data["BR"]["width"] - margin,
           h - data["BR"]["base"] - margin,
           data["BR"]["scale"])
+
+    # top-center
+    _draw(tc,
+          (w - data["TC"]["width"]) // 2,
+          margin + data["TC"]["height"],
+          data["TC"]["scale"])
+
+    # bottom-center
+    _draw(bc,
+          (w - data["BC"]["width"]) // 2,
+          h - data["BC"]["base"] - margin,
+          data["BC"]["scale"])
 
     return frame
