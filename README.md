@@ -33,7 +33,6 @@ git clone https://github.com/DotaPie/purr-view.git && cd ./purr-view
 ```
 Open ./src/config.json and edit as you want (cams, ftp server, paths, ...)
 - Configuration will work out-of-box, except cameras configuration (mainly number of cameras and their device paths)
-- If STATUS_LED_RPI is true, requirements-rpi.txt is used instead of requirements.txt during installation
 ```
 sudo bash ./install.sh
 ```
