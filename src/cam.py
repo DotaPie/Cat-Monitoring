@@ -411,7 +411,9 @@ class CameraManager:
                     logger.debug(f"[{cam_name}] [Frame #{frame_counter}] Applying FPS limiter (sleeping {sleep_time*1000:.3f} ms)")
                     time.sleep(sleep_time)
                 elif frame_duration > frame_duration_expected and not skip_detection_flag:
-                    logger.warning(f"[{cam_name}] [Frame #{frame_counter}] Frame is taking too long to process")    
+                    # NOTE: sometimes this pops up, but FPS counter still shows targeted FPS even during writing/rendering frames, commenting out for now
+                    #logger.warning(f"[{cam_name}] [Frame #{frame_counter}] Frame is taking too long to process")    
+                    pass
             
         # Cleanup: Close video writer if still open
         if video_writer is not None:
