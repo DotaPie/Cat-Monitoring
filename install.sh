@@ -28,33 +28,18 @@ echo " > Updating APT index and installing python3-pip, libgl1, jq, avahi-daemon
 apt update
 apt install -y python3-pip libgl1 jq avahi-daemon
 
-# --- Hostname & /etc/hosts (for mDNS name purrview.local) ---
-echo " > Setting hostname to '${HOSTNAME_TARGET}' and updating /etc/hosts ..."
-# Backup once
-[[ -f /etc/hostname && ! -f /etc/hostname.bak ]] && cp /etc/hostname /etc/hostname.bak
-[[ -f /etc/hosts    && ! -f /etc/hosts.bak    ]] && cp /etc/hosts    /etc/hosts.bak
+# --- Set hostname to 'purrview' ---
+echo " > Setting hostname to '${HOSTNAME_TARGET}' ..."
 
-# Set the static hostname
+# Simple, universal approach - set hostname everywhere
+echo "$HOSTNAME_TARGET" > /etc/hostname
 if command -v hostnamectl >/dev/null 2>&1; then
-  CURRENT_HOST="$(hostnamectl --static | tr -d '[:space:]')"
-else
-  CURRENT_HOST="$(tr -d '[:space:]' </etc/hostname)"
-fi
-if [[ "$CURRENT_HOST" != "$HOSTNAME_TARGET" ]]; then
-  if command -v hostnamectl >/dev/null 2>&1; then
-    hostnamectl set-hostname "$HOSTNAME_TARGET" --static
-  else
-    echo "$HOSTNAME_TARGET" > /etc/hostname
-  fi
+  hostnamectl set-hostname "$HOSTNAME_TARGET"
 fi
 
-# Ensure Debian/RPi convention line: 127.0.1.1 <hostname>
-# (127.0.0.1 stays for localhost; we map the host on 127.0.1.1)
-if grep -qE '^127\.0\.1\.1\s' /etc/hosts; then
-  sed -i -E "s/^127\.0\.1\.1\s+.*/127.0.1.1   ${HOSTNAME_TARGET}/" /etc/hosts
-else
-  echo "127.0.1.1   ${HOSTNAME_TARGET}" >> /etc/hosts
-fi
+# Fix /etc/hosts - remove old entries and add new one
+sed -i '/127\.0\.1\.1/d' /etc/hosts
+echo "127.0.1.1   ${HOSTNAME_TARGET} ${HOSTNAME_TARGET}.local" >> /etc/hosts
 
 # 3. Resolve log / video paths from config.json and create them
 LOGGING_PATH=$(jq -r '.LOGGING_PATH' "$CONFIG_JSON")
@@ -130,6 +115,10 @@ systemctl restart avahi-daemon
 echo -e "\nAll done!"
 echo "Local access (port 80) via mDNS:"
 echo "    http://purrview.local/"
+echo
+echo "IMPORTANT: Reboot required for hostname change:"
+echo "    sudo reboot"
+echo "    # Then wait 30 seconds and try: http://purrview.local/"
 echo
 echo "Check the service status with:"
 echo "    sudo systemctl status purr-view"
