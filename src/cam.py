@@ -37,7 +37,7 @@ state_string = {
 with open(os.path.join(os.path.dirname((os.path.abspath(__file__))), "config.json"), "r") as f:
     config = json.load(f)
 
-VIDEO_PATH_IN_RAM = "/dev/shm/CatMonitoring/videos"
+VIDEO_PATH_IN_RAM = "/dev/shm/PurrView/videos"
 
 CAMERA_CONFIGS = [
     {"NAME": cam_name, **cam_config}

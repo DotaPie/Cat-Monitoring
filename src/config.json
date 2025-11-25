@@ -1,10 +1,10 @@
 {
     "LOGGING_LEVEL": "INFO",
     "LOGGING_ROOT_LEVEL": "WARNING",
-    "LOGGING_FILE_NAME": "catmonitoring.log",
+    "LOGGING_FILE_NAME": "purrview.log",
     "LOGGING_FILE_COUNT": 30,
     "LOGGING_ROLLOVER_TIME": "midnight",
-    "LOGGING_PATH": "/var/log/CatMonitoring",
+    "LOGGING_PATH": "/var/log/PurrView",
 
     "FTP_UPLOAD_VIDEO": false,
     "FTP_HOSTNAME": "HOST",
@@ -14,7 +14,7 @@
     "FTP_TIMEOUT": 10,
 
     "SAVE_VIDEO_LOCALLY": true,
-    "VIDEO_PATH": "/opt/CatMonitoring/videos",
+    "VIDEO_PATH": "/opt/PurrView/videos",
     "MAX_CONCURRENT_VIDEO_WRITES_AND_UPLOADS": 2,
     "MAX_VIDEO_LENGTH_SECONDS": 120,
      

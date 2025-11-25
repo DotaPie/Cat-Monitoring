@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 ########################################################################
-# install-cat-monitoring.sh
+# install-purr-view.sh
 # ---------------------------------------------------------------------
-# Installs Cat-Monitoring to /opt/CatMonitoring, copies runtime files,
+# Installs Purr-View to /opt/PurrView, copies runtime files,
 # sets up a venv, installs deps from a chosen requirements file located
 # beside the installer, registers a systemd service that runs as the
-# invoking (non-root) user, and configures mDNS with hostname 'catmonitoring'.
+# invoking (non-root) user, and configures mDNS with hostname 'purrview'.
 ########################################################################
 set -euo pipefail
 
 # 1. Variables you might tweak
 RUN_USER="${SUDO_USER:-$USER}"                       # non-root account
-INSTALL_DIR="/opt/CatMonitoring"
-SERVICE_FILE="/etc/systemd/system/cat-monitoring.service"
+INSTALL_DIR="/opt/PurrView"
+SERVICE_FILE="/etc/systemd/system/purr-view.service"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"          # dir of this script
 CONFIG_JSON="${SCRIPT_DIR}/src/config.json"          # config file to read
-HOSTNAME_TARGET="catmonitoring"                      # desired hostname (no .local)
+HOSTNAME_TARGET="purrview"                      # desired hostname (no .local)
 
 # Ensure the config file is present before we go any further
 if [[ ! -f "$CONFIG_JSON" ]]; then
@@ -28,7 +28,7 @@ echo " > Updating APT index and installing python3-pip, libgl1, jq, avahi-daemon
 apt update
 apt install -y python3-pip libgl1 jq avahi-daemon
 
-# --- Hostname & /etc/hosts (for mDNS name catmonitoring.local) ---
+# --- Hostname & /etc/hosts (for mDNS name purrview.local) ---
 echo " > Setting hostname to '${HOSTNAME_TARGET}' and updating /etc/hosts ..."
 # Backup once
 [[ -f /etc/hostname && ! -f /etc/hostname.bak ]] && cp /etc/hostname /etc/hostname.bak
@@ -94,7 +94,7 @@ deactivate
 echo " > Writing systemd unit to ${SERVICE_FILE} ..."
 cat > "$SERVICE_FILE" <<UNIT
 [Unit]
-Description=Cat Monitoring
+Description=Purr View
 After=network.target
 
 [Service]
@@ -117,19 +117,19 @@ WantedBy=multi-user.target
 UNIT
 
 # 7. Enable & start the app service
-echo " > Enabling and starting cat-monitoring.service ..."
+echo " > Enabling and starting purr-view.service ..."
 systemctl daemon-reload
-systemctl enable cat-monitoring
-systemctl start  cat-monitoring
+systemctl enable purr-view
+systemctl start  purr-view
 
-# 8. Enable mDNS responder (Avahi) so http://catmonitoring.local/ works
+# 8. Enable mDNS responder (Avahi) so http://purrview.local/ works
 echo " > Enabling mDNS (avahi-daemon) ..."
 systemctl enable avahi-daemon
 systemctl restart avahi-daemon
 
 echo -e "\nAll done!"
 echo "Local access (port 80) via mDNS:"
-echo "    http://catmonitoring.local/"
+echo "    http://purrview.local/"
 echo
 echo "Check the service status with:"
-echo "    sudo systemctl status cat-monitoring"
+echo "    sudo systemctl status purr-view"

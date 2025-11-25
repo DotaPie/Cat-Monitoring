@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 ########################################################################
-# uninstall-cat-monitoring.sh
+# uninstall-purr-view.sh
 # ---------------------------------------------------------------------
-# Stops & removes Cat-Monitoring, deletes its files, restores hostname
+# Stops & removes Purr-View, deletes its files, restores hostname
 # and /etc/hosts from backups (if present), and reboots.
 ########################################################################
 set -euo pipefail
@@ -13,9 +13,9 @@ if (( EUID != 0 )); then
     exit 1
 fi
 
-SERVICE_NAME="cat-monitoring"
+SERVICE_NAME="purr-view"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-INSTALL_DIR="/opt/CatMonitoring"
+INSTALL_DIR="/opt/PurrView"
 CONFIG_JSON="${INSTALL_DIR}/config.json"
 
 echo " > Stopping and disabling ${SERVICE_NAME}.service ..."

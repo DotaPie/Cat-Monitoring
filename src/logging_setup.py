@@ -54,7 +54,7 @@ LOG_CONF = {
         "handlers": ["console", "file"]                       
     },
     "loggers": {
-        "catmonitoring": {
+        "purrview": {
             "level": LOGGING_LEVEL,
             "handlers": ["console", "file"],
             "propagate": False
@@ -66,6 +66,6 @@ def _setup_logging():
     os.makedirs(LOGGING_PATH, exist_ok=True)
     logging.config.dictConfig(LOG_CONF)
 
-def get_logger(name: str = "catmonitoring") -> logging.Logger:
+def get_logger(name: str = "purrview") -> logging.Logger:
     _setup_logging()
     return logging.getLogger(name)

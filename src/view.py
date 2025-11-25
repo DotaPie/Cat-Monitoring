@@ -10,7 +10,7 @@ INDEX_HTML = """
 <html>
 <head>
   <meta charset="utf-8"/>
-  <title>Cat Monitoring</title>
+  <title>Purr View</title>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <style>
     :root { color-scheme: light dark; }

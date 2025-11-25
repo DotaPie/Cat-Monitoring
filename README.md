@@ -1,9 +1,9 @@
-# Cat Monitoring
+# Purr View
 - Takes stream from any amount of cameras (or any video stream that is accepted by opencv python library) and detects motion on them. 
 - If motion is detected, video (with some pre-buffer and post-buffer) is saved locally or uploaded to FTP server (can do one or another, or both). 
 - Streams can be viewed via web browser (this feature supports only up to 4 streams).
 <p align="center">
-  <img src="https://github.com/DotaPie/cat-monitoring/blob/main/cat.gif" width="640" alt="Usage preview">
+  <img src="https://github.com/DotaPie/purr-view/blob/main/cat.gif" width="640" alt="Usage preview">
 </p>
 
 ## Hardware requirements
@@ -29,7 +29,7 @@ I will be assuming example of 2 cams, each 640 x 480 @ 10 FPS, and running on Ra
 
 ## Quick start
 ```
-git clone https://github.com/DotaPie/cat-monitoring.git && cd ./cat-monitoring
+git clone https://github.com/DotaPie/purr-view.git && cd ./purr-view
 ```
 Open ./src/config.json and edit as you want (cams, ftp server, paths, ...)
 - Configuration will work out-of-box, except cameras configuration (mainly number of cameras and their device paths)
@@ -41,21 +41,21 @@ sudo bash ./install.sh
 ### Verify service is up and runing and check logs
 > We can also filter by keyword, for example "[SYS]"
 ```
-sudo systemctl status cat-monitoring
-sudo journalctl -u cat-monitoring.service -n 100 -f 
-sudo journalctl -u cat-monitoring.service -n 100 -f -g '\[SYS\]'
+sudo systemctl status purr-view
+sudo journalctl -u purr-view.service -n 100 -f 
+sudo journalctl -u purr-view.service -n 100 -f -g '\[SYS\]'
 ```
 
 ### Preview camera streams
 > Supports only up to 4 video stream views
 ```
-http://catmonitoring.local
+http://purrview.local
 ```
 
 ### Change configuration only
 ```
-sudo nano /opt/CatMonitoring/config.json
-sudo systemctl restart cat-monitoring
+sudo nano /opt/PurrView/config.json
+sudo systemctl restart purr-view
 ```
 
 ### Re-deploy service easily after changing files in ./src
