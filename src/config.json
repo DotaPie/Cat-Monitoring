@@ -15,7 +15,7 @@
 
     "SAVE_VIDEO_LOCALLY": true,
     "VIDEO_PATH": "/opt/PurrView/videos",
-    "MAX_CONCURRENT_VIDEO_WRITES_AND_UPLOADS": 2,
+    "MAX_CONCURRENT_VIDEO_WRITES_AND_UPLOADS": 1,
     "MAX_VIDEO_LENGTH_SECONDS": 120,
      
     "SKIP_DETECTION_SECONDS": 10,
@@ -27,40 +27,22 @@
 
     "HTTP_SERVER_ENABLED": true,
     "HTTP_SERVER_PORT": 80,
-    "HTTP_FPS_LIMITER": 10,
+    "HTTP_FPS_LIMITER": 25,
 
     "CAM1":{
         "DEVICE_PATH": "/dev/v4l/by-path/<YOUR_CAM_1>",
-        "FPS": 10,
-        "FPS_LIMITER": 10,
-        "FRAME_WIDTH": 640,
-        "FRAME_HEIGHT": 480,
+        "FPS": 25,
+        "FPS_LIMITER": 25,
+        "FRAME_WIDTH": 1280,
+        "FRAME_HEIGHT": 720,
 
         "MOTION_DETECTION_THRESHOLD_PERCENT": 1.0,
         "MOTION_DETECTION_DOWNSCALE": 2.0,
-        "MOTION_DETECTION_FRAME_STEP": 2,
+        "MOTION_DETECTION_FRAME_STEP": 5,
 
         "NUMBER_OF_FRAMES_WITH_MOTION": 3,
-        "NUMBER_OF_FRAMES_WITH_NO_MOTION": 15,
+        "NUMBER_OF_FRAMES_WITH_NO_MOTION": 25,
 
-        "PRE_MOTION_SECONDS": 3,
-        "POST_MOTION_SECONDS": 3
-    },
-
-    "CAM2":{
-        "DEVICE_PATH": "/dev/v4l/by-path/<YOUR_CAM_2>",
-        "FPS": 10,
-        "FPS_LIMITER": 10,
-        "FRAME_WIDTH": 640,
-        "FRAME_HEIGHT": 480,
-
-        "MOTION_DETECTION_THRESHOLD_PERCENT": 1.0,
-        "MOTION_DETECTION_DOWNSCALE": 2.0,
-        "MOTION_DETECTION_FRAME_STEP": 2,
-
-        "NUMBER_OF_FRAMES_WITH_MOTION": 3,
-        "NUMBER_OF_FRAMES_WITH_NO_MOTION": 15,
-        
         "PRE_MOTION_SECONDS": 3,
         "POST_MOTION_SECONDS": 3
     }
