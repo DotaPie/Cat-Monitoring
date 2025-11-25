@@ -62,10 +62,10 @@ LOG_CONF = {
     }
 }
 
-def setup_logging():
+def _setup_logging():
     os.makedirs(LOGGING_PATH, exist_ok=True)
     logging.config.dictConfig(LOG_CONF)
 
 def get_logger(name: str = "catmonitoring") -> logging.Logger:
-    setup_logging()
+    _setup_logging()
     return logging.getLogger(name)

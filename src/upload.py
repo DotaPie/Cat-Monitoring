@@ -20,12 +20,12 @@ FTP_PATH = config["FTP_PATH"]
 FTP_TIMEOUT = config["FTP_TIMEOUT"]
 
 
-def ftp_join_path(*parts) -> str:
+def _ftp_join_path(*parts) -> str:
     """Join path parts with forward slashes for FTP"""
     return "/".join(str(p).strip("/\\") for p in parts)
 
 
-def ensure_remote_dirs(ftp: ftplib.FTP, path: str) -> None:
+def _ensure_remote_dirs(ftp: ftplib.FTP, path: str) -> None:
     """Create remote directory structure if it doesn't exist"""
     original_cwd = ftp.pwd()
     try:
@@ -42,7 +42,7 @@ def ensure_remote_dirs(ftp: ftplib.FTP, path: str) -> None:
         ftp.cwd(original_cwd)                    # restore working dir
 
 
-def ftp_upload_file(cam_name: str, full_file_path: str) -> None:
+def _ftp_upload_file(cam_name: str, full_file_path: str) -> None:
     """Upload a file to FTP server with automatic directory creation"""
     if full_file_path is None:
         raise ValueError("full_file_path must be provided")
@@ -51,15 +51,15 @@ def ftp_upload_file(cam_name: str, full_file_path: str) -> None:
 
     # --- build remote paths -------------------------------------------------
     YYYY, MM, DD = date.today().strftime("%Y %m %d").split()
-    remote_dir   = ftp_join_path(FTP_PATH, YYYY, MM, DD)
-    remote_file  = ftp_join_path(remote_dir, os.path.basename(full_file_path))
+    remote_dir   = _ftp_join_path(FTP_PATH, YYYY, MM, DD)
+    remote_file  = _ftp_join_path(remote_dir, os.path.basename(full_file_path))
 
     # --- connect and upload -------------------------------------------------
     with ftplib.FTP(FTP_HOSTNAME, FTP_USERNAME, FTP_PASSWORD, timeout=FTP_TIMEOUT) as ftp:
         ftp.encoding = "utf-8"
 
         # create YYYY/MM/DD under FTP_PATH if needed
-        ensure_remote_dirs(ftp, remote_dir)
+        _ensure_remote_dirs(ftp, remote_dir)
 
         # transfer the file
         with open(full_file_path, "rb") as src:
@@ -68,7 +68,7 @@ def ftp_upload_file(cam_name: str, full_file_path: str) -> None:
             logger.info(f"[{cam_name}] Uploaded {remote_file} ({duration_ms:.3f} ms)")
 
 
-def save_file_locally(cam_name: str, full_file_path: str, local_path: str) -> None:
+def _save_file_locally(cam_name: str, full_file_path: str, local_path: str) -> None:
     """Copy file to local storage directory"""
     logger.info(f"[{cam_name}] Copying file {full_file_path} to {local_path} ...")
     shutil.copy2(full_file_path, os.path.join(local_path, os.path.basename(full_file_path)))
@@ -81,14 +81,14 @@ def upload_and_cleanup(cam_name: str, full_file_path: str,
         # FTP Upload
         if ftp_upload:
             try:
-                ftp_upload_file(cam_name, full_file_path)
+                _ftp_upload_file(cam_name, full_file_path)
             except Exception as e:
                 logger.error(f"[{cam_name}] Failed to upload file {full_file_path} ({repr(e)})")
 
         # Local Storage
         if save_locally:
             try:
-                save_file_locally(cam_name, full_file_path, local_path)
+                _save_file_locally(cam_name, full_file_path, local_path)
             except Exception as e:
                 logger.error(f"[{cam_name}] Failed to save file locally {full_file_path} ({repr(e)})")
         

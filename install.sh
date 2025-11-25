@@ -68,7 +68,7 @@ chmod 750 "$LOGGING_PATH" "$VIDEO_PATH"
 # 4. Copy runtime files (no requirements files)
 echo " > Copying runtime files to ${INSTALL_DIR}/"
 mkdir -p "$INSTALL_DIR"
-cp "${SCRIPT_DIR}"/src/{config.json,logging_setup.py,main.py,hud.py,view.py} "$INSTALL_DIR/"
+cp "${SCRIPT_DIR}"/src/{config.json,logging_setup.py,main.py,hud.py,view.py,upload.py,cam.py} "$INSTALL_DIR/"
 
 # 5. Virtual environment + dependency install
 echo " > Creating Python virtual environment ..."
