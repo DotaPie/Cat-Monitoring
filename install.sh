@@ -31,7 +31,25 @@ apt install -y python3-pip libgl1 jq avahi-daemon
 # --- Set hostname to 'purrview' ---
 echo " > Setting hostname to '${HOSTNAME_TARGET}' ..."
 
-# Simple, universal approach - set hostname everywhere
+# Disable cloud-init hostname management if present
+if [[ -d /etc/cloud ]]; then
+  echo " > Disabling cloud-init hostname management ..."
+  
+  # Disable in main config
+  if [[ -f /etc/cloud/cloud.cfg ]]; then
+    sed -i 's/manage_etc_hosts: [Tt]rue/manage_etc_hosts: false/' /etc/cloud/cloud.cfg
+  fi
+  
+  # Create override config
+  mkdir -p /etc/cloud/cloud.cfg.d
+  cat > /etc/cloud/cloud.cfg.d/99-disable-hostname.cfg <<EOF
+# Disable cloud-init hostname management for Purr-View
+preserve_hostname: true
+manage_etc_hosts: false
+EOF
+fi
+
+# Set hostname everywhere
 echo "$HOSTNAME_TARGET" > /etc/hostname
 if command -v hostnamectl >/dev/null 2>&1; then
   hostnamectl set-hostname "$HOSTNAME_TARGET"
@@ -116,9 +134,7 @@ echo -e "\nAll done!"
 echo "Local access (port 80) via mDNS:"
 echo "    http://purrview.local/"
 echo
-echo "IMPORTANT: Reboot required for hostname change:"
-echo "    sudo reboot"
-echo "    # Then wait 30 seconds and try: http://purrview.local/"
+echo "IMPORTANT: Reboot required for hostname change"
 echo
 echo "Check the service status with:"
 echo "    sudo systemctl status purr-view"
