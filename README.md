@@ -7,11 +7,13 @@
 </p>
 
 ## Hardware requirements
-I will be assuming example of 2 cams, each 640 x 480 @ 10 FPS, and running on Raspberry PI 4
-- RAM: process consumes up to 500 MB, but there is still chance of some memory leaking so I recommend at least 1 GB (for now)
-    - this also depends on the configuration of pre-buffer and post-buffer 
-- CPU: process consumes around 15% of the CPU while idling in detection
-  - this increases to 30% when previewing the video streams from both cams
+I will be assuming example of 1 cam, 1280 x 720 @ 25 FPS, running on Raspberry PI 5, using example configuration
+- RAM: recommended at least 2GB
+    - this also heavily depends on configuration of pre-buffer and max length of the video
+- CPU: process consumes around 8% of the CPU while idling in detection
+  - this increases to 15% when previewing the video stream
+  - this further increases when video is being rendered (usually topping one core)
+      - this single core speed also limits the max FPS of the video stream (video is rendered during recording, to avoid enormous RAM requirements)
 - GPU: not needed
 - Camera: any USB camera/-s (or any video stream that is accepted by opencv python library)
 
@@ -20,7 +22,7 @@ I will be assuming example of 2 cams, each 640 x 480 @ 10 FPS, and running on Ra
 - installed python3.8 or higher (python3.11 or higher recommended, because of EOL https://devguide.python.org/versions/)
 - installed git
 - mounted /dev/shm with (should be already there on most modern linux distros)
-    - size depends on number of video streams, resolution and FPS, but allocating 256 MB will be most likely enaugh
+    - size depends on number of video streams, resolution and FPS, but make sure to have allocated enaugh (for my case 2GB)
 - GUI not needed
 
 ## FTP server requirements (optional):
