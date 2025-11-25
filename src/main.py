@@ -13,8 +13,8 @@ from datetime import datetime as dt
 from datetime import timedelta, date
 import json
 import time
-import ftplib
 from pathlib import Path, PurePosixPath
+from upload import upload_and_cleanup
 import signal
 import shutil
 import psutil
@@ -55,7 +55,7 @@ VIDEO_PATH = Path(os.path.expandvars(config["VIDEO_PATH"])).expanduser() # deals
 SAVE_VIDEO_LOCALLY = config["SAVE_VIDEO_LOCALLY"]
 MAX_CONCURRENT_VIDEO_WRITES_AND_UPLOADS = config["MAX_CONCURRENT_VIDEO_WRITES_AND_UPLOADS"]
 MAX_VIDEO_LENGTH_SECONDS = config["MAX_VIDEO_LENGTH_SECONDS"]
-SKIP_FIRST_FRAMES = config["SKIP_FIRST_FRAMES"]
+SKIP_DETECTION_SECONDS = config["SKIP_DETECTION_SECONDS"]
 HTTP_SERVER_ENABLED = config["HTTP_SERVER_ENABLED"]
 HTTP_SERVER_PORT = config["HTTP_SERVER_PORT"]
 HTTP_FPS_LIMITER = config["HTTP_FPS_LIMITER"]
@@ -88,51 +88,7 @@ video_upload_executor = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_VIDEO_WRIT
 current_frame = [None for _ in range(CAM_COUNT)]
 
 ### FUNCTIONS ###
-def ftp_join_path(*parts) -> str:
-    return "/".join(str(p).strip("/\\") for p in parts)
 
-def ensure_remote_dirs(ftp: ftplib.FTP, path: str) -> None:
-    original_cwd = ftp.pwd()
-    try:
-        for part in PurePosixPath(path).parts:
-            if part == "/":
-                continue
-            try:
-                ftp.mkd(part)                     # try to create this level
-            except ftplib.error_perm as e:
-                if not str(e).startswith("550"):  # 550 = already exists
-                    raise                        # re-raise unexpected errors
-            ftp.cwd(part)                        # descend into it
-    finally:
-        ftp.cwd(original_cwd)                    # restore working dir
-
-def get_YYYYMMDD():
-    today = date.today()
-    return today.strftime("%Y"), today.strftime("%m"), today.strftime("%d")
-
-def ftp_upload_file(cam_name: str, full_file_path: str) -> None:
-    if full_file_path is None:
-        raise ValueError("full_file_path must be provided")
-    
-    timestamp = dt.now().timestamp()
-
-    # --- build remote paths -------------------------------------------------
-    YYYY, MM, DD = date.today().strftime("%Y %m %d").split()
-    remote_dir   = ftp_join_path(FTP_PATH, YYYY, MM, DD)
-    remote_file  = ftp_join_path(remote_dir, os.path.basename(full_file_path))
-
-    # --- connect and upload -------------------------------------------------
-    with ftplib.FTP(FTP_HOSTNAME, FTP_USERNAME, FTP_PASSWORD, timeout=FTP_TIMEOUT) as ftp:
-        ftp.encoding = "utf-8"
-
-        # create YYYY/MM/DD under FTP_PATH if needed
-        ensure_remote_dirs(ftp, remote_dir)
-
-        # transfer the file
-        with open(full_file_path, "rb") as src:
-            ftp.storbinary(f"STOR {remote_file}", src)
-            duration_ms = (dt.now().timestamp() - timestamp) * 1000
-            logger.info(f"[{cam_name}] Uploaded {remote_file} ({duration_ms:.3f} ms)")
 
 def get_datetime_string(shiftSeconds=None):
     if shiftSeconds != None:
@@ -191,31 +147,9 @@ def post_process_video(cam_index, pre_buffer_frames, motion_video_path, motion_s
         duration_ms = (dt.now().timestamp() - timestamp) * 1000
         logger.info(f"[{cam_name}] Combined video saved as {full_file_path} ({duration_ms:.3f} ms)")
 
-        """Handle FTP upload and local storage after video is complete"""
-        try:
-            if FTP_UPLOAD_VIDEO:
-                try:
-                    ftp_upload_file(cam_name, full_file_path)
-                except Exception as e:
-                    logger.error(f"[{cam_name}] Failed to upload file {full_file_path} ({repr(e)})")
-
-            if SAVE_VIDEO_LOCALLY:
-                try:
-                    logger.info(f"[{cam_name}] Copying file {full_file_path} into {VIDEO_PATH} ...")
-                    shutil.copy2(full_file_path, os.path.join(VIDEO_PATH, os.path.basename(full_file_path)))
-                except Exception as e:
-                    logger.error(f"[{cam_name}] Failed to save file locally {full_file_path} ({repr(e)})")
-            
-            logger.debug(f"[{cam_name}] Deleting file {full_file_path} ...")
-            os.remove(full_file_path)
-            
-        except Exception as e:
-            logger.error(f"[{cam_name}] Failed to process file {full_file_path} ({repr(e)})")
-            if full_file_path and os.path.exists(full_file_path):
-                try:
-                    os.remove(full_file_path)
-                except:
-                    pass
+        # Handle FTP upload and local storage after video is complete
+        upload_and_cleanup(cam_name, full_file_path, 
+                          FTP_UPLOAD_VIDEO, SAVE_VIDEO_LOCALLY, VIDEO_PATH)
         
     except Exception as e:
         logger.error(f"[{cam_name}] Failed to process combined video {full_file_path} ({repr(e)})")
@@ -287,6 +221,9 @@ def cam_worker(cam_index):
     fps_frame_count = 0
     fps_last_second = int(dt.now().timestamp())
 
+    skip_detection_timestamp = dt.now().timestamp()
+    skip_detection_flag = True
+
     if CAMERA_CONFIGS[cam_index]["FPS_LIMITER"] != 0:
         frame_duration_expected = 1.0 / float(CAMERA_CONFIGS[cam_index]["FPS_LIMITER"])
         frame_timestamp = dt.now().timestamp()
@@ -347,8 +284,13 @@ def cam_worker(cam_index):
         
         logger.debug(f"[{cam_name}] [Frame #{frame_counter}] HUD draw ({hud_duration:.3f} ms), Buffer append ({buffer_duration:.3f} ms)")
 
+        if skip_detection_flag:
+            if dt.now().timestamp() - skip_detection_timestamp > SKIP_DETECTION_SECONDS:
+                skip_detection_flag = False
+                logger.info(f"[{cam_name}] Motion detection enabled (SKIP_DETECTION_SECONDS elapsed)")
+
         # stabilize frame detector first
-        if frame_counter > SKIP_FIRST_FRAMES: 
+        if not skip_detection_flag: 
             # Measure motion logic processing time
             logic_start = dt.now().timestamp()
             
@@ -470,7 +412,7 @@ def cam_worker(cam_index):
                 sleep_time = frame_duration_expected - frame_duration
                 logger.debug(f"[{cam_name}] [Frame #{frame_counter}] Applying FPS limiter (sleeping {sleep_time*1000:.3f} ms)")
                 time.sleep(sleep_time)
-            elif frame_duration > frame_duration_expected and frame_counter > SKIP_FIRST_FRAMES:
+            elif frame_duration > frame_duration_expected and not skip_detection_flag:
                 logger.warning(f"[{cam_name}] [Frame #{frame_counter}] Frame is taking too long to process")    
         
     # Cleanup: Close video writer if still open
@@ -569,7 +511,7 @@ def init_cam(cam_index):
     
     logger.info(f"[{cam_name}] Settings")
     logger.info(f"[{cam_name}]   |-- Resolution: {actual_width}x{actual_height}")
-    logger.info(f"[{cam_name}]   |-- Hardware FPS: {cam_fps}")
+    logger.info(f"[{cam_name}]   |-- Hardware FPS: {actual_fps}")
     logger.info(f"[{cam_name}]   |-- Software FPS limit: {cam_fps_limiter}")
     logger.info(f"[{cam_name}]   |-- Motion detection threshold %: {cam_motion_detection_threshold_percent}")
     logger.info(f"[{cam_name}]   |-- Format: {fourcc_str}")
