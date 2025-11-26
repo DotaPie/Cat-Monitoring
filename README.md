@@ -9,7 +9,9 @@
 ## Hardware requirements
 I will be assuming example of 1 cam, 1280 x 720 @ 25 FPS, running on Raspberry PI 5, using example configuration
 - RAM: recommended at least 2GB
-    - this also heavily depends on configuration of pre-buffer and max length of the video
+    - typical usage in idle (detection) is around 800+ MB
+    - typical usage during rendering (20-30s video) is around 1000+ MB 
+    - usage heavily depends on configuration of pre-buffer and max length of the video
 - CPU: process consumes around 8% of the CPU while idling in detection
   - this increases to 15% when previewing the video stream
   - this further increases when video is being rendered (usually topping one core)
