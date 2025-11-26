@@ -22,7 +22,7 @@ I will be assuming example of 1 cam, 1280 x 720 @ 25 FPS, running on Raspberry P
 
 ## OS requirements: 
 - debian based linux
-- installed python3.8 or higher (python3.11 or higher recommended, because of EOL https://devguide.python.org/versions/)
+- installed python3.11 or higher
 - installed git
 - mounted /dev/shm with (should be already there on most modern linux distros)
     - size depends on number of video streams, resolution and FPS, but make sure to have allocated enaugh (for my case 2GB)
