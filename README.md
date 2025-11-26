@@ -2,6 +2,7 @@
 - Takes stream from any amount of cameras (or any video stream that is accepted by opencv python library) and detects motion on them. 
 - If motion is detected, video (with some pre-buffer and post-buffer) is saved locally or uploaded to FTP server (can do one or another, or both). 
 - Streams can be viewed via web browser (this feature supports only up to 4 streams).
+- It is installed as linux systemd service
 <p align="center">
   <img src="https://github.com/DotaPie/purr-view/blob/main/cat.gif" width="640" alt="Usage preview">
 </p>
